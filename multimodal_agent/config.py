@@ -59,7 +59,11 @@ class LLMConfig(BaseModel):
 
 class RunConfig(BaseModel):
     seed: int = 774
-    device: str = "auto"                   # auto | cuda | mps | cpu
+    device: str = "auto"                   # auto | cuda | mps | cpu (feature extraction, fine-tuning)
+    # Projection heads on cached features train on the CPU by default: about twice as
+    # slow as an Apple GPU at this size (0.4 vs 0.2 s per epoch for ~8,500 pairs) but
+    # bit-for-bit reproducible, which GPU kernels are not. "auto" uses `device`.
+    heads_device: str = "cpu"
     quick: bool = False
     replay: str | None = None              # directory of cached LLM responses to replay
     runs_dir: str = "runs"
