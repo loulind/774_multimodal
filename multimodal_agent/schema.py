@@ -171,3 +171,179 @@ class DataProfile(BaseModel):
         if self.split:
             parts.append("predefined split " + "/".join(f"{v:,}" for v in self.split.counts.values()))
         return "; ".join(parts)
+
+    def label(self, column: str | None) -> LabelProfile | None:
+        return next((lab for lab in self.labels if lab.column == column), None)
+
+    def group(self, column: str | None) -> GroupProfile | None:
+        return next((g for g in self.groups if g.column == column), None)
+
+
+# ---------------------------------------------------------------------------
+# Objective
+# ---------------------------------------------------------------------------
+
+TaskType = Literal["retrieval", "cross_modal_prediction", "classification", "clustering",
+                   "joint_embedding"]
+# Tasks with a metric of their own; "joint_embedding" is a means, not an end.
+MEASURABLE_TASKS = ("retrieval", "cross_modal_prediction", "classification", "clustering")
+
+
+class PredictionSpec(BaseModel):
+    source: str                                   # modality predicted from
+    target: str                                   # modality predicted
+
+
+class TaskSpec(BaseModel):
+    """The user's objective, made explicit. Produced by objective.py (+ LLM)."""
+    raw_objective: str
+    tasks: list[TaskType]                         # in order of first mention
+    primary_task: TaskType                        # first measurable task
+    pair: list[str]                               # the two modalities to integrate
+    prediction: PredictionSpec | None = None
+    label_column: str | None = None               # for classification / clustering / probes
+    label_evidence: str = ""
+    modality_mentions: dict[str, list[str]] = Field(default_factory=dict)
+    evidence: dict[str, list[str]] = Field(default_factory=dict)   # task -> matched phrases
+    source: Literal["heuristic", "llm"] = "heuristic"
+
+
+# ---------------------------------------------------------------------------
+# Plan
+# ---------------------------------------------------------------------------
+
+class SplitSpec(BaseModel):
+    strategy: Literal["predefined", "grouped_kfold", "random"]
+    group_column: str | None = None
+    n_folds: int = 1                              # grouped_kfold: folds over groups (1 = one held-out set)
+    val_fraction: float = 0.1                     # random / carved from train when no val split
+    test_fraction: float = 0.2                    # random, and grouped with one fold
+    stratify_column: str | None = None
+
+
+class ModalityPlan(BaseModel):
+    modality: str                                 # name in the dataset
+    encoder: str                                  # encoders.registry name
+    regime: Literal["frozen", "partial_finetune", "from_scratch"] = "frozen"
+    trainable_blocks: int = 0                     # partial_finetune: last N transformer blocks
+    # preprocessing; fields that do not apply to the modality's kind are ignored
+    patch_context: float | None = None            # spot patches: patch side / spot diameter
+    colour_normalisation: Literal["none", "reinhard"] = "none"
+    greyscale_to_rgb: bool = False
+    augment: bool = False                         # flips/crops; only when backbones train
+    text_max_tokens: int | None = None
+    text_cleaning: Literal["none", "basic"] = "basic"
+    n_variable_features: int | None = None        # matrix: top variable features kept
+    matrix_input: Literal["log_normalised", "pca", "standardised"] | None = None
+    pca_components: int | None = None
+
+
+LossName = Literal["infonce", "soft_infonce", "supervised_ce", "supcon", "cross_modal_regression",
+                   "reconstruction", "ssl_simclr", "masked_denoising"]
+
+
+class LossTerm(BaseModel):
+    name: LossName
+    weight: float = 1.0
+
+
+class HeadSpec(BaseModel):
+    embed_dim: int = 256                          # dimension of the joint space
+    hidden_dim: int = 512
+    n_layers: int = 2
+    dropout: float = 0.1
+
+
+class TrainingSpec(BaseModel):
+    batch_size: int = 256
+    lr: float = 1e-3
+    weight_decay: float = 1e-4
+    max_epochs: int = 200
+    patience: int = 15
+    temperature_init: float = 0.07
+    learnable_temperature: bool = True
+    soft_target_temperature: float = 0.1          # soft_infonce: sharpness of similarity targets
+    finetune_lr: float = 1e-5                     # backbone blocks under partial fine-tuning
+    train_seconds: float = 120.0                  # wall-clock cap per fit
+
+
+class ConfigSpec(BaseModel):
+    """One trained configuration: the primary, or a comparison that tests a decision."""
+    name: str
+    role: Literal["primary", "comparison"] = "primary"
+    strategy: Literal["contrastive_alignment", "supervised_fusion", "self_supervised",
+                      "linear_alignment"]
+    fusion: Literal["joint", "early", "late"] = "joint"
+    modalities: list[ModalityPlan]
+    losses: list[LossTerm]
+    head: HeadSpec = Field(default_factory=HeadSpec)
+    training: TrainingSpec = Field(default_factory=TrainingSpec)
+    rationale: str = ""
+
+
+PrimaryMetric = Literal["retrieval_mean_recall_at_10", "prediction_mean_pearson_top50",
+                        "probe_macro_f1", "clustering_ari"]
+
+
+class EvalSpec(BaseModel):
+    primary_metric: PrimaryMetric
+    metrics: list[str]
+    baselines: list[str]
+    label_column: str | None = None
+    group_column: str | None = None               # batch / group silhouette
+    retrieval_ks: list[int] = Field(default_factory=lambda: [1, 5, 10])
+    prediction_genes: int = 50                    # most variable target features scored
+
+
+DownstreamName = Literal["retrieval_examples", "cross_modal_prediction", "classification",
+                         "clustering", "spatial_maps"]
+
+
+class Plan(BaseModel):
+    task: TaskSpec
+    split: SplitSpec
+    configs: list[ConfigSpec]
+    evaluation: EvalSpec
+    downstream: list[DownstreamName] = Field(default_factory=list)
+    rationale: str = ""
+    source: Literal["heuristic", "llm", "llm_repaired", "heuristic_fallback"] = "heuristic"
+
+    @property
+    def primary(self) -> ConfigSpec:
+        return next(c for c in self.configs if c.role == "primary")
+
+
+# ---------------------------------------------------------------------------
+# Decision log
+# ---------------------------------------------------------------------------
+
+class Alternative(BaseModel):
+    option: str
+    reason: str
+
+
+class Decision(BaseModel):
+    step: str                     # profile | objective | split | strategy | encoder | ...
+    decision: str                 # what was being decided
+    chosen: str
+    rationale: str
+    alternatives_rejected: list[Alternative] = Field(default_factory=list)
+    evidence: dict[str, float | int | str | bool | None | list | dict] = Field(default_factory=dict)
+    source: Literal["heuristic", "llm", "validator", "critic", "system"] = "heuristic"
+
+
+# ---------------------------------------------------------------------------
+# Encoder screening (filled in by encoders/screening.py)
+# ---------------------------------------------------------------------------
+
+class ScreenScore(BaseModel):
+    encoder: str
+    score: float                          # higher is better
+    metric: str
+    details: dict[str, float | int | str | None] = Field(default_factory=dict)
+
+
+class ScreeningResult(BaseModel):
+    modality: str
+    ranked: list[ScreenScore]             # best first
+    note: str = ""

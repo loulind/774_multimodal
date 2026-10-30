@@ -1,0 +1,619 @@
+{
+  "$defs": {
+    "ConfigSpec": {
+      "description": "One trained configuration: the primary, or a comparison that tests a decision.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "default": "primary",
+          "enum": [
+            "primary",
+            "comparison"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "strategy": {
+          "enum": [
+            "contrastive_alignment",
+            "supervised_fusion",
+            "self_supervised",
+            "linear_alignment"
+          ],
+          "title": "Strategy",
+          "type": "string"
+        },
+        "fusion": {
+          "default": "joint",
+          "enum": [
+            "joint",
+            "early",
+            "late"
+          ],
+          "title": "Fusion",
+          "type": "string"
+        },
+        "modalities": {
+          "items": {
+            "$ref": "#/$defs/ModalityPlan"
+          },
+          "title": "Modalities",
+          "type": "array"
+        },
+        "losses": {
+          "items": {
+            "$ref": "#/$defs/LossTerm"
+          },
+          "title": "Losses",
+          "type": "array"
+        },
+        "head": {
+          "$ref": "#/$defs/HeadSpec"
+        },
+        "training": {
+          "$ref": "#/$defs/TrainingSpec"
+        },
+        "rationale": {
+          "default": "",
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "strategy",
+        "modalities",
+        "losses"
+      ],
+      "title": "ConfigSpec",
+      "type": "object"
+    },
+    "EvalSpec": {
+      "properties": {
+        "primary_metric": {
+          "enum": [
+            "retrieval_mean_recall_at_10",
+            "prediction_mean_pearson_top50",
+            "probe_macro_f1",
+            "clustering_ari"
+          ],
+          "title": "Primary Metric",
+          "type": "string"
+        },
+        "metrics": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Metrics",
+          "type": "array"
+        },
+        "baselines": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Baselines",
+          "type": "array"
+        },
+        "label_column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label Column"
+        },
+        "group_column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group Column"
+        },
+        "retrieval_ks": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Retrieval Ks",
+          "type": "array"
+        },
+        "prediction_genes": {
+          "default": 50,
+          "title": "Prediction Genes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "primary_metric",
+        "metrics",
+        "baselines"
+      ],
+      "title": "EvalSpec",
+      "type": "object"
+    },
+    "HeadSpec": {
+      "properties": {
+        "embed_dim": {
+          "default": 256,
+          "title": "Embed Dim",
+          "type": "integer"
+        },
+        "hidden_dim": {
+          "default": 512,
+          "title": "Hidden Dim",
+          "type": "integer"
+        },
+        "n_layers": {
+          "default": 2,
+          "title": "N Layers",
+          "type": "integer"
+        },
+        "dropout": {
+          "default": 0.1,
+          "title": "Dropout",
+          "type": "number"
+        }
+      },
+      "title": "HeadSpec",
+      "type": "object"
+    },
+    "LossTerm": {
+      "properties": {
+        "name": {
+          "enum": [
+            "infonce",
+            "soft_infonce",
+            "supervised_ce",
+            "supcon",
+            "cross_modal_regression",
+            "reconstruction",
+            "ssl_simclr",
+            "masked_denoising"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "weight": {
+          "default": 1.0,
+          "title": "Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "LossTerm",
+      "type": "object"
+    },
+    "ModalityPlan": {
+      "properties": {
+        "modality": {
+          "title": "Modality",
+          "type": "string"
+        },
+        "encoder": {
+          "title": "Encoder",
+          "type": "string"
+        },
+        "regime": {
+          "default": "frozen",
+          "enum": [
+            "frozen",
+            "partial_finetune",
+            "from_scratch"
+          ],
+          "title": "Regime",
+          "type": "string"
+        },
+        "trainable_blocks": {
+          "default": 0,
+          "title": "Trainable Blocks",
+          "type": "integer"
+        },
+        "patch_context": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Patch Context"
+        },
+        "colour_normalisation": {
+          "default": "none",
+          "enum": [
+            "none",
+            "reinhard"
+          ],
+          "title": "Colour Normalisation",
+          "type": "string"
+        },
+        "greyscale_to_rgb": {
+          "default": false,
+          "title": "Greyscale To Rgb",
+          "type": "boolean"
+        },
+        "augment": {
+          "default": false,
+          "title": "Augment",
+          "type": "boolean"
+        },
+        "text_max_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text Max Tokens"
+        },
+        "text_cleaning": {
+          "default": "basic",
+          "enum": [
+            "none",
+            "basic"
+          ],
+          "title": "Text Cleaning",
+          "type": "string"
+        },
+        "n_variable_features": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N Variable Features"
+        },
+        "matrix_input": {
+          "anyOf": [
+            {
+              "enum": [
+                "log_normalised",
+                "pca",
+                "standardised"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Matrix Input"
+        },
+        "pca_components": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pca Components"
+        }
+      },
+      "required": [
+        "modality",
+        "encoder"
+      ],
+      "title": "ModalityPlan",
+      "type": "object"
+    },
+    "PredictionSpec": {
+      "properties": {
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "target"
+      ],
+      "title": "PredictionSpec",
+      "type": "object"
+    },
+    "SplitSpec": {
+      "properties": {
+        "strategy": {
+          "enum": [
+            "predefined",
+            "grouped_kfold",
+            "random"
+          ],
+          "title": "Strategy",
+          "type": "string"
+        },
+        "group_column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group Column"
+        },
+        "n_folds": {
+          "default": 1,
+          "title": "N Folds",
+          "type": "integer"
+        },
+        "val_fraction": {
+          "default": 0.1,
+          "title": "Val Fraction",
+          "type": "number"
+        },
+        "test_fraction": {
+          "default": 0.2,
+          "title": "Test Fraction",
+          "type": "number"
+        },
+        "stratify_column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stratify Column"
+        }
+      },
+      "required": [
+        "strategy"
+      ],
+      "title": "SplitSpec",
+      "type": "object"
+    },
+    "TaskSpec": {
+      "description": "The user's objective, made explicit. Produced by objective.py (+ LLM).",
+      "properties": {
+        "raw_objective": {
+          "title": "Raw Objective",
+          "type": "string"
+        },
+        "tasks": {
+          "items": {
+            "enum": [
+              "retrieval",
+              "cross_modal_prediction",
+              "classification",
+              "clustering",
+              "joint_embedding"
+            ],
+            "type": "string"
+          },
+          "title": "Tasks",
+          "type": "array"
+        },
+        "primary_task": {
+          "enum": [
+            "retrieval",
+            "cross_modal_prediction",
+            "classification",
+            "clustering",
+            "joint_embedding"
+          ],
+          "title": "Primary Task",
+          "type": "string"
+        },
+        "pair": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Pair",
+          "type": "array"
+        },
+        "prediction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PredictionSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "label_column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label Column"
+        },
+        "label_evidence": {
+          "default": "",
+          "title": "Label Evidence",
+          "type": "string"
+        },
+        "modality_mentions": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Modality Mentions",
+          "type": "object"
+        },
+        "evidence": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Evidence",
+          "type": "object"
+        },
+        "source": {
+          "default": "heuristic",
+          "enum": [
+            "heuristic",
+            "llm"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw_objective",
+        "tasks",
+        "primary_task",
+        "pair"
+      ],
+      "title": "TaskSpec",
+      "type": "object"
+    },
+    "TrainingSpec": {
+      "properties": {
+        "batch_size": {
+          "default": 256,
+          "title": "Batch Size",
+          "type": "integer"
+        },
+        "lr": {
+          "default": 0.001,
+          "title": "Lr",
+          "type": "number"
+        },
+        "weight_decay": {
+          "default": 0.0001,
+          "title": "Weight Decay",
+          "type": "number"
+        },
+        "max_epochs": {
+          "default": 200,
+          "title": "Max Epochs",
+          "type": "integer"
+        },
+        "patience": {
+          "default": 15,
+          "title": "Patience",
+          "type": "integer"
+        },
+        "temperature_init": {
+          "default": 0.07,
+          "title": "Temperature Init",
+          "type": "number"
+        },
+        "learnable_temperature": {
+          "default": true,
+          "title": "Learnable Temperature",
+          "type": "boolean"
+        },
+        "soft_target_temperature": {
+          "default": 0.1,
+          "title": "Soft Target Temperature",
+          "type": "number"
+        },
+        "finetune_lr": {
+          "default": 1e-05,
+          "title": "Finetune Lr",
+          "type": "number"
+        },
+        "train_seconds": {
+          "default": 120.0,
+          "title": "Train Seconds",
+          "type": "number"
+        }
+      },
+      "title": "TrainingSpec",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "task": {
+      "$ref": "#/$defs/TaskSpec"
+    },
+    "split": {
+      "$ref": "#/$defs/SplitSpec"
+    },
+    "configs": {
+      "items": {
+        "$ref": "#/$defs/ConfigSpec"
+      },
+      "title": "Configs",
+      "type": "array"
+    },
+    "evaluation": {
+      "$ref": "#/$defs/EvalSpec"
+    },
+    "downstream": {
+      "items": {
+        "enum": [
+          "retrieval_examples",
+          "cross_modal_prediction",
+          "classification",
+          "clustering",
+          "spatial_maps"
+        ],
+        "type": "string"
+      },
+      "title": "Downstream",
+      "type": "array"
+    },
+    "rationale": {
+      "default": "",
+      "title": "Rationale",
+      "type": "string"
+    },
+    "source": {
+      "default": "heuristic",
+      "enum": [
+        "heuristic",
+        "llm",
+        "llm_repaired",
+        "heuristic_fallback"
+      ],
+      "title": "Source",
+      "type": "string"
+    }
+  },
+  "required": [
+    "task",
+    "split",
+    "configs",
+    "evaluation"
+  ],
+  "title": "Plan",
+  "type": "object"
+}

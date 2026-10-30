@@ -36,7 +36,52 @@ def main(argv=None) -> None:
     pr.add_argument("--out", help="write the profile as JSON here")
     pr.add_argument("--label-column")
     pr.add_argument("--group-column")
+    pl = sub.add_parser("plan", help="dry run: profile, parse the objective and print the rule-based plan")
+    pl.add_argument("--data", required=True)
+    pl.add_argument("--objective", required=True)
+    pl.add_argument("--quick", action="store_true")
+    pl.add_argument("--out", help="write plan.json and decision_log.json here")
+    sc = sub.add_parser("schema", help="write the plan's JSON schema")
+    sc.add_argument("--out", default="schemas/plan.schema.json")
     args = ap.parse_args(argv)
+
+    if args.cmd == "schema":
+        from pathlib import Path
+
+        from .schema import Plan
+
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.out).write_text(json.dumps(Plan.model_json_schema(), indent=2) + "\n")
+        print(f"wrote {args.out}")
+        return
+
+    if args.cmd == "plan":
+        from pathlib import Path
+
+        from .config import load_config
+        from .data.loaders import load_path
+        from .decision_log import DecisionLog
+        from .hardware import detect
+        from .objective import parse_objective
+        from .planner import heuristic
+        from .planner.validator import validate
+        from .profiler import profile
+
+        prof = profile(load_path(args.data))
+        budget = load_config(quick=args.quick).budget(detect().device)
+        log = DecisionLog(Path(args.out) / "decision_log.json" if args.out else None)
+        task = parse_objective(args.objective, prof)
+        result = validate(heuristic.plan(prof, task, budget, log, quick=args.quick), prof, budget,
+                          args.quick)
+        for r in result.repairs:
+            log.add("validator", "plan repair", r, "guardrail", source="validator")
+        if args.out:
+            (Path(args.out) / "plan.json").write_text(result.plan.model_dump_json(indent=2))
+        print(prof.brief())
+        for d in log.entries:
+            print(f"- [{d.step}] {d.decision}: {d.chosen}")
+        print("errors:", result.errors or "none")
+        return
 
     if args.cmd == "profile":
         from .data.loaders import load_path
