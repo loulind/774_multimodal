@@ -36,9 +36,11 @@ FT_MIN_PAIRS = 10_000
 FT_PRIMARY_PAIRS = 50_000
 FT_BLOCKS = 2
 FT_MIN_EPOCHS = 2
-# Assumed partial-fine-tuning throughput (pairs/second) of a ViT-B/16 image tower with
-# a BERT-base text tower, used only to check that FT_MIN_EPOCHS fit the time budget.
-FT_THROUGHPUT = {"cuda": 250.0, "mps": 60.0, "cpu": 6.0}
+# Partial-fine-tuning throughput (pairs/second) of a ViT-B/16 image tower with a
+# BERT-base text tower, used only to check that FT_MIN_EPOCHS fit the time budget.
+# MPS value measured on an M2 Pro (~45 pairs/s, last 2 blocks of each tower trainable);
+# the others are conservative guesses.
+FT_THROUGHPUT = {"cuda": 250.0, "mps": 45.0, "cpu": 4.0}
 # --- losses -----------------------------------------------------------------------------
 # Share of samples with a near-identical twin above which hard InfoNCE would push apart
 # many pairs that are effectively the same sample (false negatives).

@@ -9,7 +9,8 @@ import torch
 from multimodal_agent.encoders import pretrained, screening
 from multimodal_agent.encoders.pretrained import FeatureCache
 from multimodal_agent.encoders.registry import REGISTRY, EncoderInfo, candidates
-from multimodal_agent.encoders.screening import CCA, recall_at_k, ridge_r2
+from multimodal_agent.evaluate.metrics import recall_at_k, ridge_r2
+from multimodal_agent.models.linear import CCA
 from multimodal_agent.models.heads import MLP, n_parameters
 from multimodal_agent.preprocess.image import ImageTransform, ReinhardNormalizer, lab_to_rgb, rgb_to_lab
 from multimodal_agent.preprocess.matrix import MatrixPreprocessor

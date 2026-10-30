@@ -27,6 +27,8 @@ from __future__ import annotations
 import numpy as np
 
 from ..data.dataset import MaterializedSource
+from ..evaluate.metrics import recall_at_k, ridge_r2
+from ..models.linear import CCA
 from ..preprocess.image import ImageTransform, ReinhardNormalizer
 from ..preprocess.matrix import MatrixPreprocessor
 from ..preprocess.text import clean
@@ -42,58 +44,6 @@ RANK_METRIC = {"retrieval": "alignment_recall_at_10", "joint_embedding": "alignm
 # ---------------------------------------------------------------------------
 # statistics
 # ---------------------------------------------------------------------------
-
-def _inv_sqrt(C: np.ndarray, reg: float) -> np.ndarray:
-    C = C + reg * np.trace(C) / len(C) * np.eye(len(C))
-    w, V = np.linalg.eigh(C)
-    return V @ np.diag(1 / np.sqrt(np.clip(w, 1e-12, None))) @ V.T
-
-
-class CCA:
-    """Ridge-regularised CCA on PCA-reduced views (closed form)."""
-
-    def __init__(self, k: int = 32, reg: float = 1e-2, pre: int = 64):
-        self.k, self.reg, self.pre = k, reg, pre
-
-    def fit(self, X: np.ndarray, Y: np.ndarray) -> CCA:
-        from sklearn.decomposition import PCA
-
-        n = len(X)
-        self.px = PCA(min(self.pre, X.shape[1], n - 1), random_state=0).fit(X)
-        self.py = PCA(min(self.pre, Y.shape[1], n - 1), random_state=0).fit(Y)
-        A, B = self.px.transform(X), self.py.transform(Y)
-        Wa, Wb = _inv_sqrt(A.T @ A / n, self.reg), _inv_sqrt(B.T @ B / n, self.reg)
-        U, s, Vt = np.linalg.svd(Wa @ (A.T @ B / n) @ Wb)
-        k = min(self.k, len(s))
-        self.Ua, self.Ub, self.corr = Wa @ U[:, :k], Wb @ Vt.T[:, :k], s[:k]
-        return self
-
-    def transform(self, X: np.ndarray, Y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        return self.px.transform(X) @ self.Ua, self.py.transform(Y) @ self.Ub
-
-
-def recall_at_k(Za: np.ndarray, Zb: np.ndarray, k: int = 10) -> float:
-    """Mean of a->b and b->a recall@k for row-aligned pairs (cosine similarity)."""
-    a = Za / np.maximum(np.linalg.norm(Za, axis=1, keepdims=True), 1e-9)
-    b = Zb / np.maximum(np.linalg.norm(Zb, axis=1, keepdims=True), 1e-9)
-    S = a @ b.T
-    diag = np.diag(S)
-    r_ab = (S > diag[:, None]).sum(1) < k
-    r_ba = (S > diag[None, :]).sum(0) < k
-    return float((r_ab.mean() + r_ba.mean()) / 2)
-
-
-def ridge_r2(Xtr, Ytr, Xva, Yva) -> float:
-    from sklearn.linear_model import RidgeCV
-    from sklearn.preprocessing import StandardScaler
-
-    sc = StandardScaler().fit(Xtr)
-    m = RidgeCV(alphas=np.logspace(-1, 4, 12)).fit(sc.transform(Xtr), Ytr)
-    pred = m.predict(sc.transform(Xva))
-    sse = ((Yva - pred) ** 2).sum()
-    sst = ((Yva - Ytr.mean(0)) ** 2).sum()
-    return float(1 - sse / max(sst, 1e-12))
-
 
 def probe_f1(Xtr, ytr, Xva, yva) -> float | None:
     from sklearn.linear_model import LogisticRegression
@@ -113,15 +63,20 @@ def probe_f1(Xtr, ytr, Xva, yva) -> float | None:
 # features for one modality
 # ---------------------------------------------------------------------------
 
-def fit_normalizer(source, groups: np.ndarray, train_idx: np.ndarray, rng, per_group: int = 30) -> ReinhardNormalizer:
-    """Per-group colour statistics from a sample of each group's own images; the
-    reference colour is the average of the training groups."""
+def fit_normalizer(source, groups: np.ndarray, rng, per_group: int = 30) -> ReinhardNormalizer:
+    """Per-group colour statistics from a sample of each group's own images.
+
+    The reference colour is the average over all groups: a fixed template,
+    computed once, so image features are extracted once for every fold. It uses
+    no labels and nothing from the paired modality; each group is normalised
+    with its own statistics, like any per-sample standardisation.
+    """
     samples = {}
     for g in np.unique(groups):
         members = np.flatnonzero(groups == g)
         pick = rng.choice(members, min(per_group, len(members)), replace=False)
         samples[str(g)] = [np.asarray(source.load(int(i)).convert("RGB")) for i in source.order(pick)]
-    return ReinhardNormalizer().fit(samples, sorted({str(g) for g in groups[train_idx]}))
+    return ReinhardNormalizer().fit(samples)
 
 
 def image_key_parts(ds, mplan: ModalityPlan, idx: np.ndarray, normalizer=None) -> dict:
@@ -197,7 +152,7 @@ def screen(ds, profile, task, prelim_plan, train_idx: np.ndarray, val_idx: np.nd
     if any(m.colour_normalisation == "reinhard" for m in mplans.values()) and norm_groups is not None:
         img_name = next(n for n, m in mplans.items() if ds.modalities[n].kind == "image")
         src = ds.modalities[img_name].images
-        normalizer = fit_normalizer(src, norm_groups, train_idx, rng)
+        normalizer = fit_normalizer(src, norm_groups, rng)
 
     feats: dict[str, dict[str, tuple[np.ndarray, np.ndarray]]] = {}
     for name, mp in mplans.items():
