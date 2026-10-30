@@ -1,0 +1,23 @@
+# Budgets, seeds and LLM settings only. Modeling decisions (encoders, losses,
+# fusion, splits) are never configured; they come from the data profile and the
+# objective.
+seed: 774
+device: auto
+max_critic_revisions: 1
+full:
+  train_seconds_per_fit: 180
+  finetune_seconds_per_fit: 1200
+  total_train_seconds: 2700
+  max_epochs: 300
+  max_folds: 4
+  screening_train: 2000
+  screening_val: 500
+  max_candidates: 4
+  eval_max_samples: 5000
+llm:
+  enabled: true
+  model: claude-opus-5-5
+  max_output_tokens: 16000
+  effort: {planner: high, critic: high, writer: medium}
+  max_budget_usd: 3.0
+  refusal_fallback: true
