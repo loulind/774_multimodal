@@ -26,6 +26,7 @@ import scipy.sparse as sp
 
 from .data.dataset import Modality, MultimodalDataset, SpotPatchSource
 from .data.roles import SPLIT_TOKENS, coarsest_group
+from .preprocess.matrix import lognorm, top_variable
 from .schema import (DataProfile, GroupProfile, ImageProfile, LabelProfile, MatrixProfile,
                      ModalityProfile, PairingProfile, RoleRecord, SpatialProfile, SplitProfile,
                      TabularProfile, TextProfile)
@@ -213,24 +214,6 @@ def _text_profile(m: Modality) -> TextProfile:
 # ---------------------------------------------------------------------------
 # matrices
 # ---------------------------------------------------------------------------
-
-def lognorm(X: sp.csr_matrix, target: float | None = None) -> tuple[sp.csr_matrix, float]:
-    """Library-size normalisation to the median library size, then log1p."""
-    lib = np.asarray(X.sum(1)).ravel().astype(float)
-    target = float(np.median(lib[lib > 0])) if target is None else target
-    scale = np.divide(target, lib, out=np.zeros_like(lib), where=lib > 0)
-    Y = sp.diags(scale) @ X.astype(np.float32)
-    Y = Y.tocsr()
-    Y.data = np.log1p(Y.data)
-    return Y, target
-
-
-def top_variable(Y: sp.csr_matrix, k: int) -> np.ndarray:
-    mean = np.asarray(Y.mean(0)).ravel()
-    sq = np.asarray(Y.multiply(Y).mean(0)).ravel()
-    var = sq - mean ** 2
-    return np.argsort(-var)[: min(k, Y.shape[1])]
-
 
 def morans_i(Z: np.ndarray, xy: np.ndarray, k: int = 6) -> np.ndarray:
     """Moran's I for every column of Z on a k-nearest-neighbour graph (row-standardised)."""

@@ -14,6 +14,7 @@ the amount of surrounding context left to the planner.
 
 from __future__ import annotations
 
+import threading
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -85,6 +86,7 @@ class SpotPatchSource(ImageSource):
         self.diameter, self.image_path = diameter, image_path
         self.context, self.max_cached = context, max_cached
         self._cache: OrderedDict[str, Any] = OrderedDict()
+        self._lock = threading.Lock()          # patches may be cut from several threads
 
     def __len__(self) -> int:
         return len(self.library)
@@ -96,14 +98,15 @@ class SpotPatchSource(ImageSource):
     def _image(self, lib: str):
         from PIL import Image
 
-        if lib not in self._cache:
-            Image.MAX_IMAGE_PIXELS = None          # whole-slide images exceed PIL's default
-            with Image.open(self.image_path[lib]) as im:
-                self._cache[lib] = im.convert("RGB")
-            while len(self._cache) > self.max_cached:
-                self._cache.popitem(last=False)
-        self._cache.move_to_end(lib)
-        return self._cache[lib]
+        with self._lock:
+            if lib not in self._cache:
+                Image.MAX_IMAGE_PIXELS = None      # whole-slide images exceed PIL's default
+                with Image.open(self.image_path[lib]) as im:
+                    self._cache[lib] = im.convert("RGB")
+                while len(self._cache) > self.max_cached:
+                    self._cache.popitem(last=False)
+            self._cache.move_to_end(lib)
+            return self._cache[lib]
 
     def patch_side(self, i: int) -> int:
         return max(4, int(round(self.context * self.diameter[self.library[i]])))
@@ -129,6 +132,32 @@ class SpotPatchSource(ImageSource):
     def describe(self) -> dict:
         return {"kind": self.kind, "n_source_images": len(self.image_path), "context": self.context,
                 "spot_diameter_px": {k: round(v, 1) for k, v in self.diameter.items()}}
+
+
+class MaterializedSource(ImageSource):
+    """A fixed set of images held in memory, optionally colour-normalised once.
+
+    Encoder screening scores several candidates on the same sample; holding the
+    sample's images in memory means slides are decoded (and stain-normalised)
+    once rather than once per candidate.
+    """
+
+    def __init__(self, source: ImageSource, indices, transform_rgb=None, groups=None):
+        from PIL import Image
+
+        self.kind = getattr(source, "kind", "files")
+        self.images: dict[int, Any] = {}
+        for i in source.order(np.asarray(indices)):
+            im = source.load(int(i)).convert("RGB")
+            if transform_rgb is not None and groups is not None:
+                im = Image.fromarray(transform_rgb(np.asarray(im), str(groups[int(i)])))
+            self.images[int(i)] = im
+
+    def __len__(self) -> int:
+        return len(self.images)
+
+    def load(self, i: int):
+        return self.images[int(i)]
 
 
 @dataclass

@@ -40,7 +40,8 @@ def main(argv=None) -> None:
     pl.add_argument("--data", required=True)
     pl.add_argument("--objective", required=True)
     pl.add_argument("--quick", action="store_true")
-    pl.add_argument("--out", help="write plan.json and decision_log.json here")
+    pl.add_argument("--out", help="write plan.json, decision_log.json and screening.json here")
+    pl.add_argument("--no-screen", action="store_true", help="skip encoder screening (no downloads)")
     sc = sub.add_parser("schema", help="write the plan's JSON schema")
     sc.add_argument("--out", default="schemas/plan.schema.json")
     args = ap.parse_args(argv)
@@ -58,29 +59,36 @@ def main(argv=None) -> None:
     if args.cmd == "plan":
         from pathlib import Path
 
-        from .config import load_config
+        from .config import REPO_ROOT, load_config
         from .data.loaders import load_path
         from .decision_log import DecisionLog
+        from .encoders.pretrained import FeatureCache
         from .hardware import detect
         from .objective import parse_objective
-        from .planner import heuristic
-        from .planner.validator import validate
+        from .planner.flow import rule_based
         from .profiler import profile
 
-        prof = profile(load_path(args.data))
-        budget = load_config(quick=args.quick).budget(detect().device)
+        cfg = load_config(quick=args.quick)
+        hw = detect(cfg.device)
+        ds = load_path(args.data)
+        prof = profile(ds, cfg.seed)
+        budget = cfg.budget(hw.device)
         log = DecisionLog(Path(args.out) / "decision_log.json" if args.out else None)
         task = parse_objective(args.objective, prof)
-        result = validate(heuristic.plan(prof, task, budget, log, quick=args.quick), prof, budget,
-                          args.quick)
-        for r in result.repairs:
-            log.add("validator", "plan repair", r, "guardrail", source="validator")
+        out = rule_based(ds, prof, task, budget, hw.device,
+                         FeatureCache(REPO_ROOT / cfg.cache_dir / "features"), log, args.quick, cfg.seed,
+                         do_screen=not args.no_screen, progress=print)
         if args.out:
-            (Path(args.out) / "plan.json").write_text(result.plan.model_dump_json(indent=2))
+            (Path(args.out) / "plan.json").write_text(out.plan.model_dump_json(indent=2))
+            (Path(args.out) / "screening.json").write_text(json.dumps(out.screening_table, indent=2,
+                                                                      default=str))
         print(prof.brief())
+        for f in out.folds:
+            print(f"  {f.name}: {f.sizes()} test groups {f.test_groups} val groups {f.val_groups}")
+        for s in out.screening:
+            print(f"  screening '{s.modality}': " + ", ".join(f"{r.encoder} {r.score:.3f}" for r in s.ranked))
         for d in log.entries:
             print(f"- [{d.step}] {d.decision}: {d.chosen}")
-        print("errors:", result.errors or "none")
         return
 
     if args.cmd == "profile":
