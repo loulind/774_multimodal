@@ -62,3 +62,5 @@ packages = ["multimodal_agent"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# anndata's own pandas-4 deprecation notice; not ours to fix.
+filterwarnings = ["ignore:The 'future.infer_string' option is deprecated"]

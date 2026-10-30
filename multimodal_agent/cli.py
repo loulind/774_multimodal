@@ -31,7 +31,27 @@ def main(argv=None) -> None:
     r.add_argument("--seed", type=int)
     r.add_argument("--model", help="LLM model id (default from config)")
     sub.add_parser("hardware", help="print detected hardware and budgets")
+    pr = sub.add_parser("profile", help="load a dataset and print its modality profile")
+    pr.add_argument("--data", required=True, help="dataset file or directory")
+    pr.add_argument("--out", help="write the profile as JSON here")
+    pr.add_argument("--label-column")
+    pr.add_argument("--group-column")
     args = ap.parse_args(argv)
+
+    if args.cmd == "profile":
+        from .data.loaders import load_path
+        from .profiler import profile
+
+        ds = load_path(args.data, args.label_column, args.group_column)
+        prof = profile(ds)
+        text = prof.model_dump_json(indent=2)
+        if args.out:
+            from pathlib import Path
+
+            Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.out).write_text(text)
+        print(text if not args.out else prof.brief())
+        return
 
     if args.cmd == "hardware":
         from .config import load_config
