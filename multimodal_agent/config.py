@@ -41,20 +41,18 @@ class Budget(BaseModel):
 
 
 class LLMConfig(BaseModel):
+    """Calls go through the local `claude` CLI (Claude Code) and its login; see llm.py."""
     enabled: bool = True
-    # Checked against the Models API at startup and against the id each response
-    # reports; see llm.py.
+    # Passed to the CLI; the model that actually answered is read back from each
+    # response and recorded, so a substitution is visible.
     model: str = "claude-opus-5-5"
     max_output_tokens: int = 16_000        # hard cap per call
     effort: dict[str, str] = Field(default_factory=lambda: {
         "planner": "high", "critic": "high", "writer": "medium"})
-    max_budget_usd: float = 3.0            # per run; further calls fall back to rules
-    refusal_fallback: bool = True          # server-side fallback model on a policy refusal
+    max_budget_usd: float = 3.0            # per run, as reported by the CLI; later calls fall back to rules
+    structured_output: bool = True         # CLI JSON-schema mode; plain text + JSON extraction if it fails
     timeout_seconds: float = 600
     max_retries: int = 2
-    # USD per million tokens, used only to estimate spend against max_budget_usd.
-    price_per_mtok: dict[str, float] = Field(default_factory=lambda: {
-        "input": 4.0, "output": 20.0, "cache_write": 5.0, "cache_read": 0.2})
 
 
 class RunConfig(BaseModel):

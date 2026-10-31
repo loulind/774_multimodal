@@ -347,3 +347,74 @@ class ScreeningResult(BaseModel):
     modality: str
     ranked: list[ScreenScore]             # best first
     note: str = ""
+
+
+# ---------------------------------------------------------------------------
+# LLM replies (shape enforced by the CLI's structured output, content by the validator)
+# ---------------------------------------------------------------------------
+
+class LLMDecision(BaseModel):
+    step: str
+    decision: str
+    chosen: str
+    rationale: str
+    alternatives_rejected: list[Alternative] = Field(default_factory=list)
+
+
+class PlannerReply(BaseModel):
+    plan: Plan
+    decisions: list[LLMDecision] = Field(default_factory=list)
+
+
+class Change(BaseModel):
+    path: str                     # e.g. "training.lr", "head.dropout", "loss.supervised_ce.weight"
+    value: float | int | str | bool
+
+
+class CriticReply(BaseModel):
+    assessment: str
+    action: Literal["none", "modify_primary", "switch_primary"]
+    target_config: str | None = None
+    changes: list[Change] = Field(default_factory=list)
+    rationale: str
+    alternatives_rejected: list[Alternative] = Field(default_factory=list)
+    expected_effect: str = ""
+
+
+class WriterReply(BaseModel):
+    executive_summary: str
+    data_and_objective: str
+    decisions_explained: str
+    results_interpretation: str
+    integration_benefit: str
+    critic_and_revision: str
+    limitations: str
+
+
+# ---------------------------------------------------------------------------
+# Critic
+# ---------------------------------------------------------------------------
+
+CriticAction = Literal["none", "modify_primary", "switch_primary"]
+
+
+class Trigger(BaseModel):
+    code: str                     # comparison_better, worse_than_<baseline>, overfitting, ...
+    message: str
+    severity: Literal["warning", "info"] = "warning"
+    config: str | None = None
+    suggested_action: CriticAction = "none"
+    suggested_target: str | None = None
+    suggested_changes: list[Change] = Field(default_factory=list)
+
+
+class Critique(BaseModel):
+    assessment: str
+    action: CriticAction = "none"
+    target_config: str | None = None          # switch_primary: the comparison to promote
+    changes: list[Change] = Field(default_factory=list)   # modify_primary: edits to the primary
+    rationale: str = ""
+    alternatives_rejected: list[Alternative] = Field(default_factory=list)
+    expected_effect: str = ""
+    triggers: list[Trigger] = Field(default_factory=list)
+    source: Literal["rules", "llm"] = "rules"

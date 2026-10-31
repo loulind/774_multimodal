@@ -12,17 +12,14 @@ dependencies = [
     "scipy>=1.11",
     "pandas>=2.0",
     "scikit-learn>=1.4",
-
     # --- deep learning (MPS on Apple silicon, CUDA elsewhere) ---
     "torch>=2.4",
     "torchvision>=0.19",
-
     # --- pretrained encoders (open weights only) ---
     "transformers>=4.44",
     "open-clip-torch>=2.26",
     "timm>=1.0",
     "huggingface-hub>=0.24",
-
     # --- data formats ---
     "anndata>=0.10",
     "scanpy>=1.10",
@@ -32,16 +29,14 @@ dependencies = [
     "pillow>=10.0",
     "pyarrow>=15.0",
     "requests>=2.31",
-
     # --- reporting ---
     "matplotlib>=3.8",
     "umap-learn>=0.5.5",
     "markdown>=3.5",
     "pyyaml>=6.0",
-
     # --- agent scaffolding ---
     "pydantic>=2.6",
-    "anthropic>=0.40",
+    "claude-agent-sdk>=0.2.176",
 ]
 
 [project.scripts]

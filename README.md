@@ -12,3 +12,5 @@ Requires Python 3.12 and [uv](https://docs.astral.sh/uv/). A GPU is optional: CU
 uv sync
 uv run mmagent hardware
 ```
+
+The planner, critic and report writer ask Claude through the local [Claude Code](https://claude.com/claude-code) CLI and its login (`claude auth login`, once); no API key is needed. `--no-llm` runs the rule-based planner, critic and writer without it.

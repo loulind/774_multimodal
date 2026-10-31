@@ -2,7 +2,7 @@
 
     mmagent run --data data/<dataset> --objective "..." --out outputs/generated_report_1
     mmagent run ... --quick          # smoke test: small subsample, seconds per fit
-    mmagent run ... --no-llm         # rule-based planner, critic and writer (no API key needed)
+    mmagent run ... --no-llm         # rule-based planner, critic and writer (no Claude CLI needed)
     mmagent run ... --replay runs/<run>/llm_cache   # reproduce LLM decisions from cache
     mmagent hardware                 # report detected device, disk and budgets
 """
@@ -36,12 +36,14 @@ def main(argv=None) -> None:
     pr.add_argument("--out", help="write the profile as JSON here")
     pr.add_argument("--label-column")
     pr.add_argument("--group-column")
-    pl = sub.add_parser("plan", help="dry run: profile, parse the objective and print the rule-based plan")
+    pl = sub.add_parser("plan", help="dry run: profile, parse the objective, screen encoders and plan")
     pl.add_argument("--data", required=True)
     pl.add_argument("--objective", required=True)
     pl.add_argument("--quick", action="store_true")
-    pl.add_argument("--out", help="write plan.json, decision_log.json and screening.json here")
+    pl.add_argument("--out", help="write plan.json, decision_log.json, screening.json and llm_cache/ here")
     pl.add_argument("--no-screen", action="store_true", help="skip encoder screening (no downloads)")
+    pl.add_argument("--no-llm", action="store_true", help="rule-based plan only")
+    pl.add_argument("--replay", help="directory of cached LLM responses to replay")
     sc = sub.add_parser("schema", help="write the plan's JSON schema")
     sc.add_argument("--out", default="schemas/plan.schema.json")
     args = ap.parse_args(argv)
@@ -64,8 +66,9 @@ def main(argv=None) -> None:
         from .decision_log import DecisionLog
         from .encoders.pretrained import FeatureCache
         from .hardware import detect
+        from .llm import make_client
         from .objective import parse_objective
-        from .planner.flow import rule_based
+        from .planner.flow import agent_plan
         from .profiler import profile
 
         cfg = load_config(quick=args.quick)
@@ -75,9 +78,10 @@ def main(argv=None) -> None:
         budget = cfg.budget(hw.device)
         log = DecisionLog(Path(args.out) / "decision_log.json" if args.out else None)
         task = parse_objective(args.objective, prof)
-        out = rule_based(ds, prof, task, budget, hw.device,
-                         FeatureCache(REPO_ROOT / cfg.cache_dir / "features"), log, args.quick, cfg.seed,
-                         do_screen=not args.no_screen, progress=print)
+        out_dir = Path(args.out) if args.out else REPO_ROOT / cfg.runs_dir / "plan_dry_run"
+        client = make_client(cfg.llm, out_dir / "llm_cache", args.replay, enabled=not args.no_llm)
+        out = agent_plan(ds, prof, task, budget, hw.device, FeatureCache(REPO_ROOT / cfg.cache_dir / "features"),
+                         log, args.quick, cfg.seed, client, do_screen=not args.no_screen, progress=print)
         if args.out:
             (Path(args.out) / "plan.json").write_text(out.plan.model_dump_json(indent=2))
             (Path(args.out) / "screening.json").write_text(json.dumps(out.screening_table, indent=2,
@@ -88,7 +92,10 @@ def main(argv=None) -> None:
         for s in out.screening:
             print(f"  screening '{s.modality}': " + ", ".join(f"{r.encoder} {r.score:.3f}" for r in s.ranked))
         for d in log.entries:
-            print(f"- [{d.step}] {d.decision}: {d.chosen}")
+            print(f"- [{d.step}] {d.decision}: {d.chosen}" + (" (LLM)" if d.source == "llm" else ""))
+        llm = client.summary()
+        print(f"plan source: {out.plan.source}; LLM calls: {llm['n_calls']} (${llm['total_cost_usd']:.2f})"
+              + "".join(f"\n  note: {n}" for n in llm["notes"]))
         return
 
     if args.cmd == "profile":
@@ -115,8 +122,9 @@ def main(argv=None) -> None:
         print(json.dumps({"hardware": hw.to_record(),
                           "full_budget": cfg.budget(hw.device).model_dump(),
                           "quick_budget": load_config(quick=True).budget(hw.device).model_dump(),
-                          "llm": {"model": cfg.llm.model,
-                                  "max_output_tokens": cfg.llm.max_output_tokens}},
+                          "llm": {"backend": "claude CLI (claude-agent-sdk)", "model": cfg.llm.model,
+                                  "max_output_tokens": cfg.llm.max_output_tokens,
+                                  "max_budget_usd": cfg.llm.max_budget_usd}},
                          indent=2))
         return
 

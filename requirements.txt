@@ -9,24 +9,35 @@ annotated-doc==0.0.5
     # via typer
 annotated-types==0.8.0
     # via pydantic
-anthropic==2.3.0
-    # via multimodal-agent
 anyio==4.15.1
     # via
-    #   anthropic
+    #   claude-agent-sdk
     #   httpx2
+    #   mcp
+    #   sse-starlette
+    #   starlette
 array-api-compat==1.16.0
     # via
     #   anndata
     #   fast-array-utils
+attrs==26.1.0
+    # via
+    #   jsonschema
+    #   referencing
 certifi==2026.10.23
     # via
     #   requests
     #   scanpy
+cffi==2.1.1 ; platform_python_implementation != 'PyPy'
+    # via cryptography
 charset-normalizer==3.5.2
     # via requests
+claude-agent-sdk==0.2.176
+    # via multimodal-agent
 click==8.5.0
-    # via huggingface-hub
+    # via
+    #   huggingface-hub
+    #   uvicorn
 cloudpickle==3.1.2
     # via joblib
 colorama==0.4.6 ; sys_platform == 'win32'
@@ -35,6 +46,8 @@ colorama==0.4.6 ; sys_platform == 'win32'
     #   typer
 contourpy==1.4.0
     # via matplotlib
+cryptography==50.0.2
+    # via pyjwt
 cuda-bindings==13.4.4 ; sys_platform == 'linux'
     # via torch
 cuda-pathfinder==1.8.5 ; sys_platform == 'linux'
@@ -43,8 +56,6 @@ cuda-toolkit==13.2.2 ; sys_platform == 'linux'
     # via torch
 cycler==0.12.1
     # via matplotlib
-docstring-parser==0.18.0
-    # via anthropic
 donfig==0.8.1.post1
     # via zarr
 fast-array-utils==1.5.1
@@ -66,7 +77,9 @@ ftfy==6.3.1
 google-crc32c==1.9.0
     # via zarr
 h11==0.16.0 ; sys_platform != 'emscripten'
-    # via httpcore2
+    # via
+    #   httpcore2
+    #   uvicorn
 h5py==3.16.0
     # via
     #   anndata
@@ -78,8 +91,8 @@ httpcore2==2.16.0 ; sys_platform != 'emscripten'
     # via httpx2
 httpx2==2.16.0
     # via
-    #   anthropic
     #   huggingface-hub
+    #   mcp
 httpx2-jsfetch==1.0 ; sys_platform == 'emscripten'
     # via httpx2
 huggingface-hub==2.4.0
@@ -102,13 +115,17 @@ interface-meta==2.0.1
     # via formulaic
 jinja2==3.1.6
     # via torch
-jiter==0.18.0
-    # via anthropic
 joblib==1.6.0
     # via
     #   pynndescent
     #   scanpy
     #   scikit-learn
+jsonschema==4.26.0
+    # via
+    #   claude-agent-sdk
+    #   mcp
+jsonschema-specifications==2025.9.1
+    # via jsonschema
 kiwisolver==1.5.1
     # via matplotlib
 legacy-api-wrap==1.5
@@ -132,6 +149,10 @@ matplotlib==3.11.2
     #   multimodal-agent
     #   scanpy
     #   seaborn
+mcp==2.3.0
+    # via claude-agent-sdk
+mcp-types==2.3.0
+    # via mcp
 mdurl==0.1.2
     # via markdown-it-py
 mpmath==1.3.0
@@ -224,7 +245,7 @@ nvidia-nvtx==13.2.86 ; (platform_machine == 'aarch64' and sys_platform == 'linux
 open-clip-torch==3.3.0
     # via multimodal-agent
 opentelemetry-api==1.45.2
-    # via anthropic
+    # via mcp
 packaging==26.3
     # via
     #   anndata
@@ -254,9 +275,12 @@ pillow==13.0.0
     #   torchvision
 pyarrow==26.0.0
     # via multimodal-agent
+pycparser==3.12 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
+    # via cffi
 pydantic==2.14.2
     # via
-    #   anthropic
+    #   mcp
+    #   mcp-types
     #   multimodal-agent
     #   pydantic-settings
 pydantic-core==2.50.2
@@ -265,6 +289,8 @@ pydantic-settings==2.16.2
     # via scverse-misc
 pygments==2.21.0
     # via rich
+pyjwt==2.15.1
+    # via mcp
 pynndescent==0.7.0
     # via
     #   scanpy
@@ -279,6 +305,10 @@ python-dotenv==1.2.4
     # via
     #   pydantic-settings
     #   scverse-misc
+python-multipart==0.0.32
+    # via mcp
+pywin32==312 ; sys_platform == 'win32'
+    # via mcp
 pyyaml==6.0.3
     # via
     #   donfig
@@ -286,6 +316,10 @@ pyyaml==6.0.3
     #   multimodal-agent
     #   timm
     #   transformers
+referencing==0.37.0
+    # via
+    #   jsonschema
+    #   jsonschema-specifications
 regex==2026.9.29
     # via
     #   open-clip-torch
@@ -294,6 +328,10 @@ requests==2.34.2
     # via multimodal-agent
 rich==15.0.0
     # via typer
+rpds-py==2026.9.1
+    # via
+    #   jsonschema
+    #   referencing
 safetensors==0.8.0
     # via
     #   open-clip-torch
@@ -335,7 +373,13 @@ shellingham==1.5.4
 six==1.17.0
     # via python-dateutil
 sniffio==1.3.1
-    # via anthropic
+    # via claude-agent-sdk
+sse-starlette==3.6.0
+    # via mcp
+starlette==1.10.0
+    # via
+    #   mcp
+    #   sse-starlette
 statsmodels==0.15.0
     # via scanpy
 sympy==1.14.0
@@ -381,23 +425,27 @@ typer==0.27.3
 typing-extensions==4.16.0
     # via
     #   anndata
-    #   anthropic
     #   anyio
     #   formulaic
     #   httpx2
     #   huggingface-hub
+    #   mcp
+    #   mcp-types
     #   numcodecs
     #   opentelemetry-api
     #   pydantic
     #   pydantic-core
     #   pydantic-settings
+    #   referencing
     #   scanpy
     #   scverse-misc
+    #   starlette
     #   torch
     #   typing-inspection
     #   zarr
 typing-inspection==0.4.4
     # via
+    #   mcp
     #   pydantic
     #   pydantic-settings
 tzdata==2026.6
@@ -410,6 +458,8 @@ umap-learn==0.5.12
     #   scanpy
 urllib3==2.8.0
     # via requests
+uvicorn==0.54.0 ; sys_platform != 'emscripten'
+    # via mcp
 wcwidth==0.9.4
     # via ftfy
 wrapt==2.5.2

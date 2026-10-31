@@ -6,8 +6,11 @@
   2. Folds are drawn; candidate encoders are screened on the first fold's
      training and validation samples (never its test samples).
   3. The final plan is made with the screening scores, so the encoder decision
-     in the log cites them. (The LLM planner, when enabled, takes over from here.)
+     in the log cites them.
   4. The plan is validated against the guardrails; repairs are logged.
+  5. ``agent_plan`` only: the LLM planner adopts or modifies the validated proposal
+     (planner/llm.py). If it changes the split, the pair or the label column, the
+     folds are drawn again from the final plan.
 """
 
 from __future__ import annotations
@@ -18,8 +21,10 @@ from ..data.splits import Fold, make_folds
 from ..decision_log import DecisionLog
 from ..encoders.pretrained import FeatureCache
 from ..encoders.screening import screen
+from ..llm import LLMClient
 from ..schema import Plan, ScreeningResult
 from . import heuristic
+from . import llm as llm_planner
 from .validator import validate
 
 
@@ -56,3 +61,25 @@ def rule_based(ds, profile, task, budget, device: str, cache: FeatureCache | Non
     for n in notes:
         log.add("split", "split note", n, "data", source="system")
     return PlanOutcome(checked.plan, folds, screening, table, notes)
+
+
+def agent_plan(ds, profile, task, budget, device: str, cache: FeatureCache | None, log: DecisionLog,
+               quick: bool, seed: int, client: LLMClient | None = None, do_screen: bool = True,
+               progress=None) -> PlanOutcome:
+    """The planning step of a run: the rule-based proposal, then the LLM planner if one is available."""
+    proposal_log = DecisionLog()
+    out = rule_based(ds, profile, task, budget, device, cache, proposal_log, quick, seed, do_screen, progress)
+    log.extend(proposal_log.entries)
+    final = llm_planner.plan(out.plan, proposal_log, profile, task, budget, log, client,
+                             out.screening_table, quick)
+    redraw = (final.split != out.plan.split or final.task.pair != out.plan.task.pair
+              or final.evaluation.label_column != out.plan.evaluation.label_column)
+    if redraw:
+        folds, notes = folds_for(ds, final, seed, budget.max_samples)
+        log.add("split", "folds", "redrawn from the final plan",
+                "The LLM changed the split, the modality pair or the label column, so the folds were "
+                "drawn again (screening used the proposal's first fold).",
+                [], {"n_folds": len(folds)}, source="system")
+        return PlanOutcome(final, folds, out.screening, out.screening_table, notes)
+    out.plan = final
+    return out

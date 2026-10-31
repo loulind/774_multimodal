@@ -14,10 +14,11 @@ full:
   screening_val: 500
   max_candidates: 4
   eval_max_samples: 5000
-llm:
+llm:                       # calls go through the local `claude` CLI and its login
   enabled: true
   model: claude-opus-5-5
   max_output_tokens: 16000
   effort: {planner: high, critic: high, writer: medium}
   max_budget_usd: 3.0
-  refusal_fallback: true
+  structured_output: true
+  timeout_seconds: 600
