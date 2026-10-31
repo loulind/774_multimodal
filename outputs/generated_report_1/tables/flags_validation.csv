@@ -1,0 +1,6 @@
+code,severity,metric,value,message,config
+no_clear_gain_over_ridge,info,prediction_mean_pearson_top50,-0.002375901160412471,No clear difference between the primary configuration and ridge on prediction_mean_pearson_top50 (mean difference -0.002; primary better in 2/4 folds).,
+no_clear_gain_over_unimodal,info,clustering_ari,0.0387915000389844,No clear difference between the primary configuration and unimodal on clustering_ari (mean difference +0.039; primary better in 2/4 folds).,
+no_clear_gain_over_cca,info,clustering_ari,0.03240443418663746,No clear difference between the primary configuration and cca on clustering_ari (mean difference +0.032; primary better in 3/4 folds).,
+comparison_better,info,,0.00675512044843056,Comparison 'hard_infonce' scores higher than the primary on retrieval_mean_recall_at_10 (0.040 vs 0.034); within noise.,hard_infonce
+comparison_better,info,,0.0025035128589454836,Comparison 'patch_context_2x' scores higher than the primary on retrieval_mean_recall_at_10 (0.036 vs 0.034); within noise.,patch_context_2x

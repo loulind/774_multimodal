@@ -1,0 +1,179 @@
+{
+ "name": "spots",
+ "path": "data/stimage_her2/spots.h5ad",
+ "format": "spatial_anndata",
+ "n_samples": 13620,
+ "modalities": [
+  {
+   "name": "expression",
+   "kind": "matrix",
+   "n_present": 13619,
+   "missing_fraction": 0.00007342143906019505,
+   "source": "spots.h5ad:X",
+   "image": null,
+   "text": null,
+   "matrix": {
+    "n_features": 11871,
+    "feature_kind": "genes",
+    "sparsity": 0.827092668216269,
+    "integer_valued": true,
+    "nonnegative": true,
+    "library_size_median": 3231.0,
+    "library_size_iqr": [
+     1596.0,
+     5804.0
+    ],
+    "features_per_sample_median": 1764.0,
+    "n_features_detected_5pct": 9514,
+    "overdispersed_fraction": 1.0,
+    "analysis_space": "library-size normalised, log1p, top 2000 variable features, 50 PCs",
+    "pca_components_50": null,
+    "pca_components_90": null,
+    "pca_top50_variance_fraction": 0.3139348346189848,
+    "near_twin_fraction": 0.232,
+    "group_variance_share": 0.7720775843832305,
+    "label_variance_share": 0.1581745382614616,
+    "group_silhouette": 0.6343016755514097,
+    "morans_i_median": 0.1445518628124538,
+    "morans_i_fraction_above_0_3": 0.05
+   },
+   "tabular": null,
+   "spatial": null
+  },
+  {
+   "name": "spatial",
+   "kind": "spatial",
+   "n_present": 13620,
+   "missing_fraction": 0.0,
+   "source": "obsm['spatial']",
+   "image": null,
+   "text": null,
+   "matrix": null,
+   "tabular": null,
+   "spatial": {
+    "n_libraries": 36,
+    "samples_per_library": [
+     176.0,
+     320.0,
+     712.0
+    ],
+    "nn_distance_px_median": 272.81126982752664,
+    "spot_diameter_px_median": 144.99999422314582,
+    "spacing_over_diameter": 1.8814571082512415
+   }
+  },
+  {
+   "name": "image",
+   "kind": "image",
+   "n_present": 13620,
+   "missing_fraction": 0.0,
+   "source": "patches around spot centres (36 source images)",
+   "image": {
+    "source": "spot_patches",
+    "n_sampled": 240,
+    "width_median": 145.0,
+    "height_median": 145.0,
+    "width_range": [
+     108.0,
+     146.0
+    ],
+    "spot_diameter_px_median": 144.99999422314582,
+    "grayscale_fraction": 0.0,
+    "mean_rgb": [
+     149.8,
+     137.3,
+     179.7
+    ],
+    "saturation_mean": 0.28421892020851375,
+    "light_background_fraction": 0.023339277526757796,
+    "dark_background_fraction": 0.00003663829117875018,
+    "stain_hue_fraction": 0.7034510836676119,
+    "sharpness_median": 337.41396077473956,
+    "near_duplicate_fraction": null,
+    "colour_between_group_share": 0.27760951594564415,
+    "domain_hint": "stained_tissue",
+    "domain_evidence": "70% of tissue pixels have a pink/purple stain hue; 0% greyscale"
+   },
+   "text": null,
+   "matrix": null,
+   "tabular": null,
+   "spatial": null
+  }
+ ],
+ "pairing": {
+  "present": {
+   "expression": 13619,
+   "spatial": 13620,
+   "image": 13620
+  },
+  "pairs": {
+   "expression|spatial": 13619,
+   "expression|image": 13619,
+   "spatial|image": 13620
+  },
+  "n_all_present": 13619
+ },
+ "roles": [
+  {
+   "column": "slide",
+   "role": "library",
+   "evidence": "values match the 36 source-image keys"
+  },
+  {
+   "column": "patient",
+   "role": "group",
+   "evidence": "8 levels; name suggests a dependence unit"
+  },
+  {
+   "column": "label",
+   "role": "label",
+   "evidence": "6 classes; name suggests an outcome"
+  }
+ ],
+ "labels": [
+  {
+   "column": "label",
+   "n_classes": 6,
+   "class_counts": {
+    "invasive cancer": 1758,
+    "connective tissue": 617,
+    "adipose tissue": 295,
+    "immune infiltrate": 252,
+    "cancer in situ": 138,
+    "breast glands": 97
+   },
+   "imbalance_ratio": 18.123711340206185,
+   "minority_class": "breast glands",
+   "n_labelled": 3157,
+   "labelled_fraction": 0.23179148311306902,
+   "labelled_groups": 8,
+   "n_groups": 8
+  }
+ ],
+ "multilabel_columns": [],
+ "groups": [
+  {
+   "column": "patient",
+   "role": "group",
+   "n_levels": 8,
+   "size_min": 1086,
+   "size_median": 1727.5,
+   "size_max": 2098,
+   "nested_in": null,
+   "split_overlap": null
+  },
+  {
+   "column": "slide",
+   "role": "library",
+   "n_levels": 36,
+   "size_min": 176,
+   "size_median": 320.0,
+   "size_max": 712,
+   "nested_in": "patient",
+   "split_overlap": null
+  }
+ ],
+ "cv_group": "patient",
+ "split": null,
+ "notes": []
+}

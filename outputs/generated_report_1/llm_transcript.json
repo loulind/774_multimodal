@@ -1,0 +1,1335 @@
+{
+ "model_requested": "claude-opus-5-5",
+ "calls": [
+  {
+   "key": "planner_e42e6dd1fd95ff46.json",
+   "role": "planner",
+   "sequence": 0,
+   "backend": "claude_cli",
+   "model_requested": "claude-opus-5-5",
+   "model_used": "claude-opus-5-5",
+   "seconds": 37.48676699999487,
+   "cost_usd": 0.09534939999999999,
+   "usage": {
+    "input_tokens": 2,
+    "output_tokens": 4572,
+    "cache_read_input_tokens": 19507,
+    "cache_creation_input_tokens": 0,
+    "stop_reason": "tool_use",
+    "models": [
+     "claude-opus-5-5"
+    ]
+   },
+   "structured": true,
+   "cached": false,
+   "note": "",
+   "response_chars": 9240,
+   "effort": "high",
+   "max_output_tokens": 16000,
+   "budget_usd_given": 3.0,
+   "system": "You are the planning component of an automated multimodal representation-learning agent used in biomedical research. Given a dataset with two or more modalities (for example images, text, molecular count matrices, tables) and a free-text objective, you decide **how to learn a joint representation**:\n- the train/validation/test split;\n- the strategy (contrastive alignment, supervised fusion, self-supervised, or linear alignment);\n- the encoder for each modality, and whether its backbone stays frozen or is partly fine-tuned;\n- the preprocessing;\n- the losses and hyperparameters;\n- up to two comparison configurations;\n- the evaluation (one primary metric, the baselines) and the downstream analyses.\n\nDeterministic Python code has already profiled the data and screened candidate encoders empirically. It will validate your plan against hard guardrails, execute it within a compute budget, evaluate it on held-out data against baselines, and report the results. You never see raw data, only the profile.\n\n## How to decide\n\n**Ground every choice in the evidence.** It must follow from the profile numbers, the screening scores, the objective and the compute budget. The dataset is anonymised. Never rely on knowledge of a named dataset or cohort; reason only from the measurements given.\n\n**Split.** Held-out data must be independent of training data.\n- When samples are nested in groups (patients, slides, articles), keep each group within one split. Correlated neighbours or shared group effects otherwise leak information and inflate scores.\n- Use a predefined split when the data provide one.\n- Cross-validate over groups when there are enough groups.\n\n**Strategy.**\n- Contrastive alignment needs enough pairs to supply informative negatives. With few pairs, linear alignment (CCA) is the lower-variance choice.\n- Supervised fusion suits a classification-only objective.\n- Labels that the objective asks you to predict can enter a supervised term next to the contrastive one. Labels requested only for evaluation must not be trained on.\n\n**Encoders.**\n- Prefer the encoder that screened best on the metric relevant to the objective, unless the screening table gives a clear reason not to (for example, near-identical scores and a much cheaper encoder).\n- Domain-specific encoders are candidates, not defaults; generic encoders remain eligible.\n- A pre-aligned dual encoder (an image tower and a text tower trained together) allows a zero-shot baseline.\n- If a pretrained model's pretraining corpus may overlap the evaluation data, say so: its zero-shot scores are then optimistic.\n\n**Frozen or fine-tuned.**\n- Frozen backbones with small projection heads have far fewer trainable parameters and are the low-variance choice when pairs number in the thousands.\n- Partial fine-tuning of the last blocks needs many pairs, a GPU and enough time for several epochs within the per-fit budget.\n\n**Losses.**\n- Symmetric InfoNCE learns a shared space for retrieval.\n- Soft-target InfoNCE suits a partner modality with many near-identical samples (high near-twin or near-duplicate fraction), so look-alike samples are not treated as negatives.\n- A regression head serves an objective that asks to predict one modality from another.\n- A supervised cross-entropy term serves an objective that asks for classification by labels.\n\n**Preprocessing.**\n- Use colour normalisation when between-group colour variation is large.\n- Choose the patch size relative to the measured structure size.\n- Set the text truncation length from the token-length distribution.\n- Select variable features for count matrices, and apply PCA when the number of samples per feature is small.\n\n**Hyperparameters.** Size them to the number of training pairs and the time budget. Small data favour fewer parameters, more regularisation and early stopping on validation data.\n\n**Comparisons.** Use at most two comparison configurations. Each should test the decision you are least sure of; it is not a variation for its own sake.\n\n**Evaluation.**\n- Take the primary metric from the objective's first measurable task.\n- Compare against the simplest credible alternatives: each modality alone, linear alignment (CCA) or ridge regression, fusion of unimodal features, and zero-shot when available.\n\n## The proposal you are given\n\nA rule-based planner has produced a complete proposal, with its reasoning. Treat it as a strong baseline written by a careful statistician, not as an instruction. You may adopt, modify or reject any part of it. For **every** element you change, record a decision that explains why and cites profile or screening numbers. If you agree with an element, you need not repeat its rationale.\n\n## Output\n\nReturn a single JSON object with exactly these keys:\n\n```json\n{\n  \"plan\": { \"... same structure as the proposal's plan ...\" },\n  \"decisions\": [\n    {\"step\": \"split|strategy|encoder|regime|preprocessing|losses|hyperparameters|comparison|evaluation|downstream|objective\",\n     \"decision\": \"what was decided\",\n     \"chosen\": \"the choice\",\n     \"rationale\": \"why, citing profile or screening numbers\",\n     \"alternatives_rejected\": [{\"option\": \"...\", \"reason\": \"...\"}]}\n  ]\n}\n```\n\nRules for `plan`:\n- **Names.** Encoders, losses, strategies, metrics, baselines and downstream analyses must come from the allowed lists given. Hyperparameters must lie in the allowed ranges.\n- **Configurations.**\n  - At most 3 configurations, exactly one with role `\"primary\"`.\n  - Every configuration encodes exactly the modalities in `task.pair`.\n  - Configuration names must be unique.\n- **Compute.**\n  - `training.train_seconds` must not exceed the per-fit budget (the fine-tuning budget for a fine-tuning configuration).\n  - Across all folds, the total must leave room for a final refit and one critic revision.\n- **Task.**\n  - Keep `task.raw_objective` exactly as given.\n  - You may correct the parsed task (its tasks, pair, prediction direction or label column) if the parser misread the objective, and you must say so in a decision with step `\"objective\"`.\n",
+   "user": "Plan the multimodal representation-learning workflow for this dataset and objective.\n\n{\n \"objective\": \"Learn joint embeddings of tissue image patches and spot-level gene expression to enable cross-modal retrieval and prediction of gene expression from histology.\",\n \"parsed_task\": {\n  \"raw_objective\": \"Learn joint embeddings of tissue image patches and spot-level gene expression to enable cross-modal retrieval and prediction of gene expression from histology.\",\n  \"tasks\": [\n   \"joint_embedding\",\n   \"retrieval\",\n   \"cross_modal_prediction\"\n  ],\n  \"primary_task\": \"retrieval\",\n  \"pair\": [\n   \"image\",\n   \"expression\"\n  ],\n  \"prediction\": {\n   \"source\": \"image\",\n   \"target\": \"expression\"\n  },\n  \"label_column\": \"label\",\n  \"label_evidence\": \"'label' is the only label column; used for evaluation only (not named in the objective)\",\n  \"modality_mentions\": {\n   \"image\": [\n    \"image\",\n    \"patches\",\n    \"histology\"\n   ],\n   \"expression\": [\n    \"gene\",\n    \"gene expression\",\n    \"expression\",\n    \"gene\",\n    \"gene expression\",\n    \"expression\"\n   ]\n  },\n  \"evidence\": {\n   \"retrieval\": [\n    \"retrieval\"\n   ],\n   \"joint_embedding\": [\n    \"joint embeddings\"\n   ],\n   \"cross_modal_prediction\": [\n    \"prediction of gene expression from histology\"\n   ]\n  }\n },\n \"data_profile\": {\n  \"format\": \"spatial_anndata\",\n  \"n_samples\": 13620,\n  \"modalities\": [\n   {\n    \"name\": \"expression\",\n    \"kind\": \"matrix\",\n    \"n_present\": 13619,\n    \"missing_fraction\": 7.342143906019505e-05,\n    \"source\": \"spots.h5ad:X\",\n    \"image\": null,\n    \"text\": null,\n    \"matrix\": {\n     \"n_features\": 11871,\n     \"feature_kind\": \"genes\",\n     \"sparsity\": 0.827092668216269,\n     \"integer_valued\": true,\n     \"nonnegative\": true,\n     \"library_size_median\": 3231.0,\n     \"library_size_iqr\": [\n      1596.0,\n      5804.0\n     ],\n     \"features_per_sample_median\": 1764.0,\n     \"n_features_detected_5pct\": 9514,\n     \"overdispersed_fraction\": 1.0,\n     \"analysis_space\": \"library-size normalised, log1p, top 2000 variable features, 50 PCs\",\n     \"pca_components_50\": null,\n     \"pca_components_90\": null,\n     \"pca_top50_variance_fraction\": 0.3139348346189848,\n     \"near_twin_fraction\": 0.232,\n     \"group_variance_share\": 0.7720775843832305,\n     \"label_variance_share\": 0.1581745382614616,\n     \"group_silhouette\": 0.6343016755514097,\n     \"morans_i_median\": 0.1445518628124538,\n     \"morans_i_fraction_above_0_3\": 0.05\n    },\n    \"tabular\": null,\n    \"spatial\": null\n   },\n   {\n    \"name\": \"spatial\",\n    \"kind\": \"spatial\",\n    \"n_present\": 13620,\n    \"missing_fraction\": 0.0,\n    \"source\": \"obsm['spatial']\",\n    \"image\": null,\n    \"text\": null,\n    \"matrix\": null,\n    \"tabular\": null,\n    \"spatial\": {\n     \"n_libraries\": 36,\n     \"samples_per_library\": [\n      176.0,\n      320.0,\n      712.0\n     ],\n     \"nn_distance_px_median\": 272.81126982752664,\n     \"spot_diameter_px_median\": 144.99999422314582,\n     \"spacing_over_diameter\": 1.8814571082512415\n    }\n   },\n   {\n    \"name\": \"image\",\n    \"kind\": \"image\",\n    \"n_present\": 13620,\n    \"missing_fraction\": 0.0,\n    \"source\": \"patches around spot centres (36 source images)\",\n    \"image\": {\n     \"source\": \"spot_patches\",\n     \"n_sampled\": 240,\n     \"width_median\": 145.0,\n     \"height_median\": 145.0,\n     \"width_range\": [\n      108.0,\n      146.0\n     ],\n     \"spot_diameter_px_median\": 144.99999422314582,\n     \"grayscale_fraction\": 0.0,\n     \"mean_rgb\": [\n      149.8,\n      137.3,\n      179.7\n     ],\n     \"saturation_mean\": 0.28421892020851375,\n     \"light_background_fraction\": 0.023339277526757796,\n     \"dark_background_fraction\": 3.663829117875018e-05,\n     \"stain_hue_fraction\": 0.7034510836676119,\n     \"sharpness_median\": 337.41396077473956,\n     \"near_duplicate_fraction\": null,\n     \"colour_between_group_share\": 0.27760951594564415,\n     \"domain_hint\": \"stained_tissue\",\n     \"domain_evidence\": \"70% of tissue pixels have a pink/purple stain hue; 0% greyscale\"\n    },\n    \"text\": null,\n    \"matrix\": null,\n    \"tabular\": null,\n    \"spatial\": null\n   }\n  ],\n  \"pairing\": {\n   \"present\": {\n    \"expression\": 13619,\n    \"spatial\": 13620,\n    \"image\": 13620\n   },\n   \"pairs\": {\n    \"expression|spatial\": 13619,\n    \"expression|image\": 13619,\n    \"spatial|image\": 13620\n   },\n   \"n_all_present\": 13619\n  },\n  \"roles\": [\n   {\n    \"column\": \"slide\",\n    \"role\": \"library\",\n    \"evidence\": \"values match the 36 source-image keys\"\n   },\n   {\n    \"column\": \"patient\",\n    \"role\": \"group\",\n    \"evidence\": \"8 levels; name suggests a dependence unit\"\n   },\n   {\n    \"column\": \"label\",\n    \"role\": \"label\",\n    \"evidence\": \"6 classes; name suggests an outcome\"\n   }\n  ],\n  \"labels\": [\n   {\n    \"column\": \"label\",\n    \"n_classes\": 6,\n    \"class_counts\": {\n     \"invasive cancer\": 1758,\n     \"connective tissue\": 617,\n     \"adipose tissue\": 295,\n     \"immune infiltrate\": 252,\n     \"cancer in situ\": 138,\n     \"breast glands\": 97\n    },\n    \"imbalance_ratio\": 18.123711340206185,\n    \"minority_class\": \"breast glands\",\n    \"n_labelled\": 3157,\n    \"labelled_fraction\": 0.23179148311306902,\n    \"labelled_groups\": 8,\n    \"n_groups\": 8\n   }\n  ],\n  \"multilabel_columns\": [],\n  \"groups\": [\n   {\n    \"column\": \"patient\",\n    \"role\": \"group\",\n    \"n_levels\": 8,\n    \"size_min\": 1086,\n    \"size_median\": 1727.5,\n    \"size_max\": 2098,\n    \"nested_in\": null,\n    \"split_overlap\": null\n   },\n   {\n    \"column\": \"slide\",\n    \"role\": \"library\",\n    \"n_levels\": 36,\n    \"size_min\": 176,\n    \"size_median\": 320.0,\n    \"size_max\": 712,\n    \"nested_in\": \"patient\",\n    \"split_overlap\": null\n   }\n  ],\n  \"cv_group\": \"patient\",\n  \"split\": null,\n  \"notes\": []\n },\n \"encoder_screening\": {\n  \"metric\": \"alignment_recall_at_10\",\n  \"n_train\": 2000,\n  \"n_val\": 500,\n  \"rows\": [\n   {\n    \"image\": \"phikon\",\n    \"expression\": \"mlp\",\n    \"cca_recall_at_10\": 0.087,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.087,\n    \"ridge_r2\": 0.21459347009658813,\n    \"probe_macro_f1\": 0.4324973524816374\n   },\n   {\n    \"image\": \"plip_image\",\n    \"expression\": \"mlp\",\n    \"cca_recall_at_10\": 0.056999999999999995,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.056999999999999995,\n    \"ridge_r2\": 0.17486244440078735,\n    \"probe_macro_f1\": 0.34014515868062783\n   },\n   {\n    \"image\": \"biomedclip_image\",\n    \"expression\": \"mlp\",\n    \"cca_recall_at_10\": 0.063,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.063,\n    \"ridge_r2\": 0.02643638849258423,\n    \"probe_macro_f1\": 0.3919645558633442\n   },\n   {\n    \"image\": \"dinov2_base\",\n    \"expression\": \"mlp\",\n    \"cca_recall_at_10\": 0.063,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.063,\n    \"ridge_r2\": 0.18359017372131348,\n    \"probe_macro_f1\": 0.35064596332201964\n   }\n  ],\n  \"probe_macro_f1\": {\n   \"image:phikon\": 0.4324973524816374,\n   \"image:plip_image\": 0.34014515868062783,\n   \"image:biomedclip_image\": 0.3919645558633442,\n   \"image:dinov2_base\": 0.35064596332201964,\n   \"expression:mlp\": 0.2795748850845707\n  },\n  \"normaliser\": {\n   \"n_groups\": 36,\n   \"target_lab_mean\": [\n    57.31,\n    14.56,\n    -21.37\n   ],\n   \"target_lab_std\": [\n    18.32,\n    4.48,\n    8.67\n   ]\n  }\n },\n \"compute_budget\": {\n  \"device\": \"mps\",\n  \"quick_mode\": false,\n  \"train_seconds_per_fit\": 180.0,\n  \"finetune_seconds_per_fit\": 1200.0,\n  \"total_train_seconds\": 2700.0,\n  \"max_epochs\": 300,\n  \"max_folds\": 4,\n  \"max_samples\": null,\n  \"total_rule\": \"n_folds x sum(train_seconds over configs) + primary refit + n_folds x primary (critic revision) <= total_train_seconds\"\n },\n \"encoder_library\": [\n  {\n   \"name\": \"phikon\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"stained_tissue\"\n   ],\n   \"dim\": 768,\n   \"max_tokens\": null,\n   \"partner\": null,\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"Owkin non-commercial\",\n   \"pretraining\": \"iBOT self-supervision on 40M TCGA histology tiles\"\n  },\n  {\n   \"name\": \"plip_image\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"stained_tissue\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": null,\n   \"partner\": \"plip_text\",\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"not stated (research use)\",\n   \"pretraining\": \"CLIP fine-tuned on OpenPath pathology image-text pairs\"\n  },\n  {\n   \"name\": \"plip_text\",\n   \"kinds\": [\n    \"text\"\n   ],\n   \"domains\": [\n    \"pathology_text\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": 77,\n   \"partner\": \"plip_image\",\n   \"finetunable\": false,\n   \"n_blocks\": null,\n   \"quick\": false,\n   \"license\": \"not stated (research use)\",\n   \"pretraining\": \"CLIP fine-tuned on OpenPath pathology image-text pairs\"\n  },\n  {\n   \"name\": \"biomedclip_image\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"greyscale_imaging\",\n    \"colour_other\",\n    \"stained_tissue\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": null,\n   \"partner\": \"biomedclip_text\",\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"MIT\",\n   \"pretraining\": \"PMC-15M: 15M figure-caption pairs from PubMed Central\"\n  },\n  {\n   \"name\": \"biomedclip_text\",\n   \"kinds\": [\n    \"text\"\n   ],\n   \"domains\": [\n    \"biomedical_text\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": 256,\n   \"partner\": \"biomedclip_image\",\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"MIT\",\n   \"pretraining\": \"PMC-15M: 15M figure-caption pairs from PubMed Central\"\n  },\n  {\n   \"name\": \"pubmedbert\",\n   \"kinds\": [\n    \"text\"\n   ],\n   \"domains\": [\n    \"biomedical_text\"\n   ],\n   \"dim\": 768,\n   \"max_tokens\": 512,\n   \"partner\": null,\n   \"finetunable\": false,\n   \"n_blocks\": null,\n   \"quick\": false,\n   \"license\": \"MIT\",\n   \"pretraining\": \"masked language modelling on PubMed abstracts and PMC full text\"\n  },\n  {\n   \"name\": \"clip_b16_image\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"generic\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": null,\n   \"partner\": \"clip_b16_text\",\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"MIT\",\n   \"pretraining\": \"CLIP on 400M web image-text pairs\"\n  },\n  {\n   \"name\": \"clip_b16_text\",\n   \"kinds\": [\n    \"text\"\n   ],\n   \"domains\": [\n    \"generic_text\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": 77,\n   \"partner\": \"clip_b16_image\",\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"MIT\",\n   \"pretraining\": \"CLIP on 400M web image-text pairs\"\n  },\n  {\n   \"name\": \"dinov2_base\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"generic\"\n   ],\n   \"dim\": 768,\n   \"max_tokens\": null,\n   \"partner\": null,\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"Apache-2.0\",\n   \"pretraining\": \"DINOv2 self-supervision on LVD-142M curated web images\"\n  },\n  {\n   \"name\": \"dinov2_small\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"generic\"\n   ],\n   \"dim\": 384,\n   \"max_tokens\": null,\n   \"partner\": null,\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": true,\n   \"license\": \"Apache-2.0\",\n   \"pretraining\": \"DINOv2 self-supervision on LVD-142M curated web images\"\n  },\n  {\n   \"name\": \"resnet50\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"generic\"\n   ],\n   \"dim\": 2048,\n   \"max_tokens\": null,\n   \"partner\": null,\n   \"finetunable\": false,\n   \"n_blocks\": null,\n   \"quick\": false,\n   \"license\": \"Apache-2.0\",\n   \"pretraining\": \"supervised ImageNet-1k\"\n  },\n  {\n   \"name\": \"resnet18\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"generic\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": null,\n   \"partner\": null,\n   \"finetunable\": false,\n   \"n_blocks\": null,\n   \"quick\": true,\n   \"license\": \"Apache-2.0\",\n   \"pretraining\": \"supervised ImageNet-1k\"\n  },\n  {\n   \"name\": \"minilm\",\n   \"kinds\": [\n    \"text\"\n   ],\n   \"domains\": [\n    \"generic_text\"\n   ],\n   \"dim\": 384,\n   \"max_tokens\": 256,\n   \"partner\": null,\n   \"finetunable\": false,\n   \"n_blocks\": null,\n   \"quick\": true,\n   \"license\": \"Apache-2.0\",\n   \"pretraining\": \"contrastive sentence-pair training on 1B web sentence pairs\"\n  },\n  {\n   \"name\": \"mlp\",\n   \"kinds\": [\n    \"matrix\",\n    \"tabular\"\n   ],\n   \"domains\": [\n    \"any\"\n   ],\n   \"dim\": 0,\n   \"max_tokens\": null,\n   \"partner\": null,\n   \"finetunable\": false,\n   \"n_blocks\": null,\n   \"quick\": false,\n   \"license\": \"n/a\",\n   \"pretraining\": \"none (trained from scratch)\"\n  }\n ],\n \"allowed\": {\n  \"encoders\": [\n   \"phikon\",\n   \"plip_image\",\n   \"plip_text\",\n   \"biomedclip_image\",\n   \"biomedclip_text\",\n   \"pubmedbert\",\n   \"clip_b16_image\",\n   \"clip_b16_text\",\n   \"dinov2_base\",\n   \"dinov2_small\",\n   \"resnet50\",\n   \"resnet18\",\n   \"minilm\",\n   \"mlp\"\n  ],\n  \"strategies\": [\n   \"contrastive_alignment\",\n   \"supervised_fusion\",\n   \"self_supervised\",\n   \"linear_alignment\"\n  ],\n  \"fusion\": [\n   \"joint\",\n   \"early\",\n   \"late\"\n  ],\n  \"regimes\": [\n   \"frozen\",\n   \"partial_finetune\",\n   \"from_scratch\"\n  ],\n  \"losses\": [\n   \"infonce\",\n   \"soft_infonce\",\n   \"supervised_ce\",\n   \"supcon\",\n   \"cross_modal_regression\",\n   \"reconstruction\",\n   \"ssl_simclr\",\n   \"masked_denoising\"\n  ],\n  \"primary_metrics\": [\n   \"retrieval_mean_recall_at_10\",\n   \"prediction_mean_pearson_top50\",\n   \"probe_macro_f1\",\n   \"clustering_ari\"\n  ],\n  \"metrics\": [\n   \"alignment_uniformity\",\n   \"clustering_ari_nmi\",\n   \"effective_rank\",\n   \"group_silhouette\",\n   \"knn_accuracy\",\n   \"linear_probe\",\n   \"modality_gap\",\n   \"prediction_pearson\",\n   \"retrieval_label_match_at_k\",\n   \"retrieval_recall_at_k\"\n  ],\n  \"baselines\": [\n   \"cca\",\n   \"chance\",\n   \"early_fusion\",\n   \"late_fusion\",\n   \"ridge\",\n   \"unimodal\",\n   \"zero_shot\"\n  ],\n  \"downstream\": [\n   \"retrieval_examples\",\n   \"cross_modal_prediction\",\n   \"classification\",\n   \"clustering\",\n   \"spatial_maps\"\n  ],\n  \"ranges\": {\n   \"head.embed_dim\": [\n    32,\n    1024\n   ],\n   \"head.hidden_dim\": [\n    64,\n    2048\n   ],\n   \"head.n_layers\": [\n    1,\n    4\n   ],\n   \"head.dropout\": [\n    0.0,\n    0.5\n   ],\n   \"training.batch_size\": [\n    16,\n    2048\n   ],\n   \"training.lr\": [\n    1e-06,\n    0.01\n   ],\n   \"training.weight_decay\": [\n    0.0,\n    0.1\n   ],\n   \"training.patience\": [\n    1,\n    50\n   ],\n   \"training.temperature_init\": [\n    0.01,\n    1.0\n   ],\n   \"training.soft_target_temperature\": [\n    0.01,\n    1.0\n   ],\n   \"training.finetune_lr\": [\n    1e-07,\n    0.0001\n   ]\n  },\n  \"loss_weight\": [\n   0.0,\n   10.0\n  ],\n  \"patch_context\": [\n   0.5,\n   3.0\n  ],\n  \"max_configs\": 3,\n  \"finetune_batch_size_max\": 256\n },\n \"proposal\": {\n  \"plan\": {\n   \"task\": {\n    \"raw_objective\": \"Learn joint embeddings of tissue image patches and spot-level gene expression to enable cross-modal retrieval and prediction of gene expression from histology.\",\n    \"tasks\": [\n     \"joint_embedding\",\n     \"retrieval\",\n     \"cross_modal_prediction\"\n    ],\n    \"primary_task\": \"retrieval\",\n    \"pair\": [\n     \"image\",\n     \"expression\"\n    ],\n    \"prediction\": {\n     \"source\": \"image\",\n     \"target\": \"expression\"\n    },\n    \"label_column\": \"label\",\n    \"label_evidence\": \"'label' is the only label column; used for evaluation only (not named in the objective)\",\n    \"modality_mentions\": {\n     \"image\": [\n      \"image\",\n      \"patches\",\n      \"histology\"\n     ],\n     \"expression\": [\n      \"gene\",\n      \"gene expression\",\n      \"expression\",\n      \"gene\",\n      \"gene expression\",\n      \"expression\"\n     ]\n    },\n    \"evidence\": {\n     \"retrieval\": [\n      \"retrieval\"\n     ],\n     \"joint_embedding\": [\n      \"joint embeddings\"\n     ],\n     \"cross_modal_prediction\": [\n      \"prediction of gene expression from histology\"\n     ]\n    },\n    \"source\": \"heuristic\"\n   },\n   \"split\": {\n    \"strategy\": \"grouped_kfold\",\n    \"group_column\": \"patient\",\n    \"n_folds\": 4,\n    \"val_fraction\": 0.1,\n    \"test_fraction\": 0.2,\n    \"stratify_column\": \"label\"\n   },\n   \"configs\": [\n    {\n     \"name\": \"primary\",\n     \"role\": \"primary\",\n     \"strategy\": \"contrastive_alignment\",\n     \"fusion\": \"joint\",\n     \"modalities\": [\n      {\n       \"modality\": \"image\",\n       \"encoder\": \"phikon\",\n       \"regime\": \"frozen\",\n       \"trainable_blocks\": 0,\n       \"patch_context\": 1.0,\n       \"colour_normalisation\": \"reinhard\",\n       \"greyscale_to_rgb\": false,\n       \"augment\": false,\n       \"text_max_tokens\": null,\n       \"text_cleaning\": \"basic\",\n       \"n_variable_features\": null,\n       \"matrix_input\": null,\n       \"pca_components\": null\n      },\n      {\n       \"modality\": \"expression\",\n       \"encoder\": \"mlp\",\n       \"regime\": \"from_scratch\",\n       \"trainable_blocks\": 0,\n       \"patch_context\": null,\n       \"colour_normalisation\": \"none\",\n       \"greyscale_to_rgb\": false,\n       \"augment\": false,\n       \"text_max_tokens\": null,\n       \"text_cleaning\": \"basic\",\n       \"n_variable_features\": 2000,\n       \"matrix_input\": \"pca\",\n       \"pca_components\": 100\n      }\n     ],\n     \"losses\": [\n      {\n       \"name\": \"soft_infonce\",\n       \"weight\": 1.0\n      },\n      {\n       \"name\": \"cross_modal_regression\",\n       \"weight\": 1.0\n      }\n     ],\n     \"head\": {\n      \"embed_dim\": 256,\n      \"hidden_dim\": 512,\n      \"n_layers\": 2,\n      \"dropout\": 0.1\n     },\n     \"training\": {\n      \"batch_size\": 512,\n      \"lr\": 0.001,\n      \"weight_decay\": 0.0001,\n      \"max_epochs\": 300,\n      \"patience\": 15,\n      \"temperature_init\": 0.07,\n      \"learnable_temperature\": true,\n      \"soft_target_temperature\": 0.1,\n      \"finetune_lr\": 1e-05,\n      \"train_seconds\": 180.0\n     },\n     \"rationale\": \"Rule-based choice; see the decision log.\"\n    },\n    {\n     \"name\": \"hard_infonce\",\n     \"role\": \"comparison\",\n     \"strategy\": \"contrastive_alignment\",\n     \"fusion\": \"joint\",\n     \"modalities\": [\n      {\n       \"modality\": \"image\",\n       \"encoder\": \"phikon\",\n       \"regime\": \"frozen\",\n       \"trainable_blocks\": 0,\n       \"patch_context\": 1.0,\n       \"colour_normalisation\": \"reinhard\",\n       \"greyscale_to_rgb\": false,\n       \"augment\": false,\n       \"text_max_tokens\": null,\n       \"text_cleaning\": \"basic\",\n       \"n_variable_features\": null,\n       \"matrix_input\": null,\n       \"pca_components\": null\n      },\n      {\n       \"modality\": \"expression\",\n       \"encoder\": \"mlp\",\n       \"regime\": \"from_scratch\",\n       \"trainable_blocks\": 0,\n       \"patch_context\": null,\n       \"colour_normalisation\": \"none\",\n       \"greyscale_to_rgb\": false,\n       \"augment\": false,\n       \"text_max_tokens\": null,\n       \"text_cleaning\": \"basic\",\n       \"n_variable_features\": 2000,\n       \"matrix_input\": \"pca\",\n       \"pca_components\": 100\n      }\n     ],\n     \"losses\": [\n      {\n       \"name\": \"infonce\",\n       \"weight\": 1.0\n      },\n      {\n       \"name\": \"cross_modal_regression\",\n       \"weight\": 1.0\n      }\n     ],\n     \"head\": {\n      \"embed_dim\": 256,\n      \"hidden_dim\": 512,\n      \"n_layers\": 2,\n      \"dropout\": 0.1\n     },\n     \"training\": {\n      \"batch_size\": 512,\n      \"lr\": 0.001,\n      \"weight_decay\": 0.0001,\n      \"max_epochs\": 300,\n      \"patience\": 15,\n      \"temperature_init\": 0.07,\n      \"learnable_temperature\": true,\n      \"soft_target_temperature\": 0.1,\n      \"finetune_lr\": 1e-05,\n      \"train_seconds\": 135.0\n     },\n     \"rationale\": \"Tests the soft-target decision.\"\n    },\n    {\n     \"name\": \"patch_context_2x\",\n     \"role\": \"comparison\",\n     \"strategy\": \"contrastive_alignment\",\n     \"fusion\": \"joint\",\n     \"modalities\": [\n      {\n       \"modality\": \"image\",\n       \"encoder\": \"phikon\",\n       \"regime\": \"frozen\",\n       \"trainable_blocks\": 0,\n       \"patch_context\": 2.0,\n       \"colour_normalisation\": \"reinhard\",\n       \"greyscale_to_rgb\": false,\n       \"augment\": false,\n       \"text_max_tokens\": null,\n       \"text_cleaning\": \"basic\",\n       \"n_variable_features\": null,\n       \"matrix_input\": null,\n       \"pca_components\": null\n      },\n      {\n       \"modality\": \"expression\",\n       \"encoder\": \"mlp\",\n       \"regime\": \"from_scratch\",\n       \"trainable_blocks\": 0,\n       \"patch_context\": null,\n       \"colour_normalisation\": \"none\",\n       \"greyscale_to_rgb\": false,\n       \"augment\": false,\n       \"text_max_tokens\": null,\n       \"text_cleaning\": \"basic\",\n       \"n_variable_features\": 2000,\n       \"matrix_input\": \"pca\",\n       \"pca_components\": 100\n      }\n     ],\n     \"losses\": [\n      {\n       \"name\": \"soft_infonce\",\n       \"weight\": 1.0\n      },\n      {\n       \"name\": \"cross_modal_regression\",\n       \"weight\": 1.0\n      }\n     ],\n     \"head\": {\n      \"embed_dim\": 256,\n      \"hidden_dim\": 512,\n      \"n_layers\": 2,\n      \"dropout\": 0.1\n     },\n     \"training\": {\n      \"batch_size\": 512,\n      \"lr\": 0.001,\n      \"weight_decay\": 0.0001,\n      \"max_epochs\": 300,\n      \"patience\": 15,\n      \"temperature_init\": 0.07,\n      \"learnable_temperature\": true,\n      \"soft_target_temperature\": 0.1,\n      \"finetune_lr\": 1e-05,\n      \"train_seconds\": 135.0\n     },\n     \"rationale\": \"Tests the patch-size decision (2 x spot diameter: more tissue context).\"\n    }\n   ],\n   \"evaluation\": {\n    \"primary_metric\": \"retrieval_mean_recall_at_10\",\n    \"metrics\": [\n     \"retrieval_recall_at_k\",\n     \"prediction_pearson\",\n     \"linear_probe\",\n     \"knn_accuracy\",\n     \"clustering_ari_nmi\",\n     \"retrieval_label_match_at_k\",\n     \"alignment_uniformity\",\n     \"modality_gap\",\n     \"effective_rank\",\n     \"group_silhouette\"\n    ],\n    \"baselines\": [\n     \"unimodal\",\n     \"chance\",\n     \"cca\",\n     \"ridge\",\n     \"early_fusion\",\n     \"late_fusion\"\n    ],\n    \"label_column\": \"label\",\n    \"group_column\": \"patient\",\n    \"retrieval_ks\": [\n     1,\n     5,\n     10\n    ],\n    \"prediction_genes\": 50\n   },\n   \"downstream\": [\n    \"retrieval_examples\",\n    \"cross_modal_prediction\",\n    \"spatial_maps\"\n   ],\n   \"rationale\": \"contrastive_alignment on image + expression for joint_embedding, retrieval, cross_modal_prediction\"\n  },\n  \"reasoning\": [\n   {\n    \"step\": \"split\",\n    \"decision\": \"how to split the data\",\n    \"chosen\": \"grouped by 'patient', 4 fold(s)\",\n    \"rationale\": \"Samples come in 8 'patient' groups; 'patient' explains 77% of the variance of the top expression components; neighbouring samples are spatially correlated (median Moran's I 0.14). Samples within a group are not independent, so whole groups are held out: grouped 4-fold cross-validation, each group tested exactly once, with one further group per fold held out for validation (early stopping and model selection).\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"random sample-level split\",\n      \"reason\": \"leaks group-level and spatial dependence into the test set and overstates performance\"\n     },\n     {\n      \"option\": \"leave-one-patient-out (8 folds)\",\n      \"reason\": \"8 fits per configuration; 4 folds still test every group once\"\n     }\n    ]\n   },\n   {\n    \"step\": \"strategy\",\n    \"decision\": \"integration strategy\",\n    \"chosen\": \"contrastive_alignment (CLIP-style)\",\n    \"rationale\": \"The objective needs a shared space (joint_embedding, retrieval, cross_modal_prediction) and there are about 8,511 training pairs. Contrastive alignment learns that space directly from the pairing: each sample's partner is its positive and the other samples in the batch its negatives (InfoNCE, a lower bound on the mutual information between modalities).\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"early fusion (concatenate features)\",\n      \"reason\": \"gives no cross-modal space: cannot retrieve or predict one modality from the other\"\n     },\n     {\n      \"option\": \"late fusion (combine per-modality predictions)\",\n      \"reason\": \"same; used as a baseline only\"\n     },\n     {\n      \"option\": \"supervised representation learning only\",\n      \"reason\": \"labels are not the objective's target; they are kept for evaluation\"\n     }\n    ]\n   },\n   {\n    \"step\": \"encoder\",\n    \"decision\": \"encoder for 'image'\",\n    \"chosen\": \"phikon\",\n    \"rationale\": \"Highest screening score among 4 candidates (alignment_recall_at_10 0.087 on held-out screening samples). Screened on 2000 training and 500 validation samples from separate groups.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"biomedclip_image\",\n      \"reason\": \"alignment_recall_at_10 0.063 < 0.087\"\n     },\n     {\n      \"option\": \"dinov2_base\",\n      \"reason\": \"alignment_recall_at_10 0.063 < 0.087\"\n     },\n     {\n      \"option\": \"plip_image\",\n      \"reason\": \"alignment_recall_at_10 0.057 < 0.087\"\n     }\n    ]\n   },\n   {\n    \"step\": \"preprocessing\",\n    \"decision\": \"'image' patch size\",\n    \"chosen\": \"1.0 x spot diameter\",\n    \"rationale\": \"Each patch covers the spot's own footprint (145 px), the tissue its RNA was captured from; resized to the encoder's input size.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"2.0 x spot diameter\",\n      \"reason\": \"adds tissue context but also cells outside the spot; tested as a comparison when the budget allows\"\n     }\n    ]\n   },\n   {\n    \"step\": \"preprocessing\",\n    \"decision\": \"'image' colour normalisation\",\n    \"chosen\": \"Reinhard\",\n    \"rationale\": \"28% of the variance in mean image colour lies between groups (ICC >= 20%); a frozen encoder would encode stain/scanner differences as signal. Colour statistics are matched to the training data.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"none\",\n      \"reason\": \"group-level colour shifts would act as a batch effect\"\n     }\n    ]\n   },\n   {\n    \"step\": \"encoder\",\n    \"decision\": \"encoder for 'expression'\",\n    \"chosen\": \"mlp (trained from scratch)\",\n    \"rationale\": \"'expression' is a matrix modality; no pretrained encoder applies, so a small MLP is trained on the preprocessed features.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"PCA projection only\",\n      \"reason\": \"linear; kept as the unimodal baseline\"\n     }\n    ]\n   },\n   {\n    \"step\": \"preprocessing\",\n    \"decision\": \"'expression' features\",\n    \"chosen\": \"library-size normalisation to the median library size, then log1p; top 2,000 variable; pca\",\n    \"rationale\": \"genes matrix, 83% zeros, median library 3,231 (integer counts): library-size normalisation to the median library size, then log1p; keep the 2,000 most variable features (fitted on training folds only); then PCA to 100 components (fitted on training data): about 8,511 training samples for 2,000 features is < 5 per feature, so compressing first reduces parameters and count noise.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"all variable features as MLP input\",\n      \"reason\": \"2,000 inputs x hidden units parameters for few samples per feature\"\n     }\n    ]\n   },\n   {\n    \"step\": \"loss\",\n    \"decision\": \"contrastive loss\",\n    \"chosen\": \"soft-target InfoNCE\",\n    \"rationale\": \"23% of 'expression' samples have a near-identical twin (> 10%). Hard InfoNCE treats every other sample in the batch as a negative, so look-alike samples would be pushed apart (false negatives); soft targets weight each candidate by its within-modality similarity instead.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"hard InfoNCE (CLIP)\",\n      \"reason\": \"penalises near-identical negatives; tested as a comparison when the budget allows\"\n     }\n    ]\n   },\n   {\n    \"step\": \"loss\",\n    \"decision\": \"prediction head\",\n    \"chosen\": \"regress 'expression' from 'image'\",\n    \"rationale\": \"The objective asks to predict expression from image: a regression head on the image embedding is trained jointly (mean squared error on the preprocessed target features). Nearest-neighbour prediction through the joint space and ridge regression on frozen features are evaluated alongside it.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"retrieval-only prediction\",\n      \"reason\": \"kept as a comparison method at evaluation\"\n     }\n    ]\n   },\n   {\n    \"step\": \"hyperparameters\",\n    \"decision\": \"head and training\",\n    \"chosen\": \"embed 256, batch 512, lr 0.001, dropout 0.1\",\n    \"rationale\": \"About 8,511 training pairs: a 256-d joint space with 2-layer heads (512 hidden) is small relative to n; batch 512 gives 511 negatives per positive; early stopping on validation (patience 15) and a 180s cap per fit; temperature learned from 0.07.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"larger heads\",\n      \"reason\": \"more parameters than the data support\"\n     }\n    ]\n   },\n   {\n    \"step\": \"regime\",\n    \"decision\": \"frozen backbones or fine-tuning\",\n    \"chosen\": \"frozen\",\n    \"rationale\": \"Frozen pretrained backbones with small trainable projection heads: few trainable parameters for the number of pairs (low variance), features computed once. Fine-tuning not tried: no pre-aligned dual encoder among the chosen encoders.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"full fine-tuning\",\n      \"reason\": \"~86M parameters per tower for the available pairs; high variance and compute\"\n     }\n    ]\n   },\n   {\n    \"step\": \"comparison\",\n    \"decision\": \"comparison configuration 'hard_infonce'\",\n    \"chosen\": \"run\",\n    \"rationale\": \"Tests the soft-target decision.\",\n    \"alternatives_rejected\": []\n   },\n   {\n    \"step\": \"comparison\",\n    \"decision\": \"comparison configuration 'patch_context_2x'\",\n    \"chosen\": \"run\",\n    \"rationale\": \"Tests the patch-size decision (2 x spot diameter: more tissue context).\",\n    \"alternatives_rejected\": []\n   },\n   {\n    \"step\": \"evaluation\",\n    \"decision\": \"primary metric\",\n    \"chosen\": \"retrieval_mean_recall_at_10\",\n    \"rationale\": \"First measurable task in the objective is 'retrieval'. Every metric is computed on held-out data and compared with unimodal features, linear alignment (CCA), ridge regression and chance, to show whether integration helped.\",\n    \"alternatives_rejected\": []\n   },\n   {\n    \"step\": \"validator\",\n    \"decision\": \"plan repair\",\n    \"chosen\": \"scaled comparison time caps by 0.75 to fit the run budget\",\n    \"rationale\": \"guardrail\",\n    \"alternatives_rejected\": []\n   },\n   {\n    \"step\": \"split\",\n    \"decision\": \"sample selection\",\n    \"chosen\": \"1 samples lack one of the paired modalities and are not used for alignment\",\n    \"rationale\": \"Recorded while drawing the folds.\",\n    \"alternatives_rejected\": []\n   }\n  ]\n }\n}",
+   "schema": {
+    "$defs": {
+     "Alternative": {
+      "properties": {
+       "option": {
+        "title": "Option",
+        "type": "string"
+       },
+       "reason": {
+        "title": "Reason",
+        "type": "string"
+       }
+      },
+      "required": [
+       "option",
+       "reason"
+      ],
+      "title": "Alternative",
+      "type": "object"
+     },
+     "ConfigSpec": {
+      "description": "One trained configuration: the primary, or a comparison that tests a decision.",
+      "properties": {
+       "name": {
+        "title": "Name",
+        "type": "string"
+       },
+       "role": {
+        "default": "primary",
+        "enum": [
+         "primary",
+         "comparison"
+        ],
+        "title": "Role",
+        "type": "string"
+       },
+       "strategy": {
+        "enum": [
+         "contrastive_alignment",
+         "supervised_fusion",
+         "self_supervised",
+         "linear_alignment"
+        ],
+        "title": "Strategy",
+        "type": "string"
+       },
+       "fusion": {
+        "default": "joint",
+        "enum": [
+         "joint",
+         "early",
+         "late"
+        ],
+        "title": "Fusion",
+        "type": "string"
+       },
+       "modalities": {
+        "items": {
+         "$ref": "#/$defs/ModalityPlan"
+        },
+        "title": "Modalities",
+        "type": "array"
+       },
+       "losses": {
+        "items": {
+         "$ref": "#/$defs/LossTerm"
+        },
+        "title": "Losses",
+        "type": "array"
+       },
+       "head": {
+        "$ref": "#/$defs/HeadSpec"
+       },
+       "training": {
+        "$ref": "#/$defs/TrainingSpec"
+       },
+       "rationale": {
+        "default": "",
+        "title": "Rationale",
+        "type": "string"
+       }
+      },
+      "required": [
+       "name",
+       "strategy",
+       "modalities",
+       "losses"
+      ],
+      "title": "ConfigSpec",
+      "type": "object"
+     },
+     "EvalSpec": {
+      "properties": {
+       "primary_metric": {
+        "enum": [
+         "retrieval_mean_recall_at_10",
+         "prediction_mean_pearson_top50",
+         "probe_macro_f1",
+         "clustering_ari"
+        ],
+        "title": "Primary Metric",
+        "type": "string"
+       },
+       "metrics": {
+        "items": {
+         "type": "string"
+        },
+        "title": "Metrics",
+        "type": "array"
+       },
+       "baselines": {
+        "items": {
+         "type": "string"
+        },
+        "title": "Baselines",
+        "type": "array"
+       },
+       "label_column": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Label Column"
+       },
+       "group_column": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Group Column"
+       },
+       "retrieval_ks": {
+        "items": {
+         "type": "integer"
+        },
+        "title": "Retrieval Ks",
+        "type": "array"
+       },
+       "prediction_genes": {
+        "default": 50,
+        "title": "Prediction Genes",
+        "type": "integer"
+       }
+      },
+      "required": [
+       "primary_metric",
+       "metrics",
+       "baselines"
+      ],
+      "title": "EvalSpec",
+      "type": "object"
+     },
+     "HeadSpec": {
+      "properties": {
+       "embed_dim": {
+        "default": 256,
+        "title": "Embed Dim",
+        "type": "integer"
+       },
+       "hidden_dim": {
+        "default": 512,
+        "title": "Hidden Dim",
+        "type": "integer"
+       },
+       "n_layers": {
+        "default": 2,
+        "title": "N Layers",
+        "type": "integer"
+       },
+       "dropout": {
+        "default": 0.1,
+        "title": "Dropout",
+        "type": "number"
+       }
+      },
+      "title": "HeadSpec",
+      "type": "object"
+     },
+     "LLMDecision": {
+      "properties": {
+       "step": {
+        "title": "Step",
+        "type": "string"
+       },
+       "decision": {
+        "title": "Decision",
+        "type": "string"
+       },
+       "chosen": {
+        "title": "Chosen",
+        "type": "string"
+       },
+       "rationale": {
+        "title": "Rationale",
+        "type": "string"
+       },
+       "alternatives_rejected": {
+        "items": {
+         "$ref": "#/$defs/Alternative"
+        },
+        "title": "Alternatives Rejected",
+        "type": "array"
+       }
+      },
+      "required": [
+       "step",
+       "decision",
+       "chosen",
+       "rationale"
+      ],
+      "title": "LLMDecision",
+      "type": "object"
+     },
+     "LossTerm": {
+      "properties": {
+       "name": {
+        "enum": [
+         "infonce",
+         "soft_infonce",
+         "supervised_ce",
+         "supcon",
+         "cross_modal_regression",
+         "reconstruction",
+         "ssl_simclr",
+         "masked_denoising"
+        ],
+        "title": "Name",
+        "type": "string"
+       },
+       "weight": {
+        "default": 1.0,
+        "title": "Weight",
+        "type": "number"
+       }
+      },
+      "required": [
+       "name"
+      ],
+      "title": "LossTerm",
+      "type": "object"
+     },
+     "ModalityPlan": {
+      "properties": {
+       "modality": {
+        "title": "Modality",
+        "type": "string"
+       },
+       "encoder": {
+        "title": "Encoder",
+        "type": "string"
+       },
+       "regime": {
+        "default": "frozen",
+        "enum": [
+         "frozen",
+         "partial_finetune",
+         "from_scratch"
+        ],
+        "title": "Regime",
+        "type": "string"
+       },
+       "trainable_blocks": {
+        "default": 0,
+        "title": "Trainable Blocks",
+        "type": "integer"
+       },
+       "patch_context": {
+        "anyOf": [
+         {
+          "type": "number"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Patch Context"
+       },
+       "colour_normalisation": {
+        "default": "none",
+        "enum": [
+         "none",
+         "reinhard"
+        ],
+        "title": "Colour Normalisation",
+        "type": "string"
+       },
+       "greyscale_to_rgb": {
+        "default": false,
+        "title": "Greyscale To Rgb",
+        "type": "boolean"
+       },
+       "augment": {
+        "default": false,
+        "title": "Augment",
+        "type": "boolean"
+       },
+       "text_max_tokens": {
+        "anyOf": [
+         {
+          "type": "integer"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Text Max Tokens"
+       },
+       "text_cleaning": {
+        "default": "basic",
+        "enum": [
+         "none",
+         "basic"
+        ],
+        "title": "Text Cleaning",
+        "type": "string"
+       },
+       "n_variable_features": {
+        "anyOf": [
+         {
+          "type": "integer"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "N Variable Features"
+       },
+       "matrix_input": {
+        "anyOf": [
+         {
+          "enum": [
+           "log_normalised",
+           "pca",
+           "standardised"
+          ],
+          "type": "string"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Matrix Input"
+       },
+       "pca_components": {
+        "anyOf": [
+         {
+          "type": "integer"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Pca Components"
+       }
+      },
+      "required": [
+       "modality",
+       "encoder"
+      ],
+      "title": "ModalityPlan",
+      "type": "object"
+     },
+     "Plan": {
+      "properties": {
+       "task": {
+        "$ref": "#/$defs/TaskSpec"
+       },
+       "split": {
+        "$ref": "#/$defs/SplitSpec"
+       },
+       "configs": {
+        "items": {
+         "$ref": "#/$defs/ConfigSpec"
+        },
+        "title": "Configs",
+        "type": "array"
+       },
+       "evaluation": {
+        "$ref": "#/$defs/EvalSpec"
+       },
+       "downstream": {
+        "items": {
+         "enum": [
+          "retrieval_examples",
+          "cross_modal_prediction",
+          "classification",
+          "clustering",
+          "spatial_maps"
+         ],
+         "type": "string"
+        },
+        "title": "Downstream",
+        "type": "array"
+       },
+       "rationale": {
+        "default": "",
+        "title": "Rationale",
+        "type": "string"
+       },
+       "source": {
+        "default": "heuristic",
+        "enum": [
+         "heuristic",
+         "llm",
+         "llm_repaired",
+         "heuristic_fallback"
+        ],
+        "title": "Source",
+        "type": "string"
+       }
+      },
+      "required": [
+       "task",
+       "split",
+       "configs",
+       "evaluation"
+      ],
+      "title": "Plan",
+      "type": "object"
+     },
+     "PredictionSpec": {
+      "properties": {
+       "source": {
+        "title": "Source",
+        "type": "string"
+       },
+       "target": {
+        "title": "Target",
+        "type": "string"
+       }
+      },
+      "required": [
+       "source",
+       "target"
+      ],
+      "title": "PredictionSpec",
+      "type": "object"
+     },
+     "SplitSpec": {
+      "properties": {
+       "strategy": {
+        "enum": [
+         "predefined",
+         "grouped_kfold",
+         "random"
+        ],
+        "title": "Strategy",
+        "type": "string"
+       },
+       "group_column": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Group Column"
+       },
+       "n_folds": {
+        "default": 1,
+        "title": "N Folds",
+        "type": "integer"
+       },
+       "val_fraction": {
+        "default": 0.1,
+        "title": "Val Fraction",
+        "type": "number"
+       },
+       "test_fraction": {
+        "default": 0.2,
+        "title": "Test Fraction",
+        "type": "number"
+       },
+       "stratify_column": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Stratify Column"
+       }
+      },
+      "required": [
+       "strategy"
+      ],
+      "title": "SplitSpec",
+      "type": "object"
+     },
+     "TaskSpec": {
+      "description": "The user's objective, made explicit. Produced by objective.py (+ LLM).",
+      "properties": {
+       "raw_objective": {
+        "title": "Raw Objective",
+        "type": "string"
+       },
+       "tasks": {
+        "items": {
+         "enum": [
+          "retrieval",
+          "cross_modal_prediction",
+          "classification",
+          "clustering",
+          "joint_embedding"
+         ],
+         "type": "string"
+        },
+        "title": "Tasks",
+        "type": "array"
+       },
+       "primary_task": {
+        "enum": [
+         "retrieval",
+         "cross_modal_prediction",
+         "classification",
+         "clustering",
+         "joint_embedding"
+        ],
+        "title": "Primary Task",
+        "type": "string"
+       },
+       "pair": {
+        "items": {
+         "type": "string"
+        },
+        "title": "Pair",
+        "type": "array"
+       },
+       "prediction": {
+        "anyOf": [
+         {
+          "$ref": "#/$defs/PredictionSpec"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null
+       },
+       "label_column": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Label Column"
+       },
+       "label_evidence": {
+        "default": "",
+        "title": "Label Evidence",
+        "type": "string"
+       },
+       "modality_mentions": {
+        "additionalProperties": {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        "title": "Modality Mentions",
+        "type": "object"
+       },
+       "evidence": {
+        "additionalProperties": {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        "title": "Evidence",
+        "type": "object"
+       },
+       "source": {
+        "default": "heuristic",
+        "enum": [
+         "heuristic",
+         "llm"
+        ],
+        "title": "Source",
+        "type": "string"
+       }
+      },
+      "required": [
+       "raw_objective",
+       "tasks",
+       "primary_task",
+       "pair"
+      ],
+      "title": "TaskSpec",
+      "type": "object"
+     },
+     "TrainingSpec": {
+      "properties": {
+       "batch_size": {
+        "default": 256,
+        "title": "Batch Size",
+        "type": "integer"
+       },
+       "lr": {
+        "default": 0.001,
+        "title": "Lr",
+        "type": "number"
+       },
+       "weight_decay": {
+        "default": 0.0001,
+        "title": "Weight Decay",
+        "type": "number"
+       },
+       "max_epochs": {
+        "default": 200,
+        "title": "Max Epochs",
+        "type": "integer"
+       },
+       "patience": {
+        "default": 15,
+        "title": "Patience",
+        "type": "integer"
+       },
+       "temperature_init": {
+        "default": 0.07,
+        "title": "Temperature Init",
+        "type": "number"
+       },
+       "learnable_temperature": {
+        "default": true,
+        "title": "Learnable Temperature",
+        "type": "boolean"
+       },
+       "soft_target_temperature": {
+        "default": 0.1,
+        "title": "Soft Target Temperature",
+        "type": "number"
+       },
+       "finetune_lr": {
+        "default": 1e-05,
+        "title": "Finetune Lr",
+        "type": "number"
+       },
+       "train_seconds": {
+        "default": 120.0,
+        "title": "Train Seconds",
+        "type": "number"
+       }
+      },
+      "title": "TrainingSpec",
+      "type": "object"
+     }
+    },
+    "properties": {
+     "plan": {
+      "$ref": "#/$defs/Plan"
+     },
+     "decisions": {
+      "items": {
+       "$ref": "#/$defs/LLMDecision"
+      },
+      "title": "Decisions",
+      "type": "array"
+     }
+    },
+    "required": [
+     "plan"
+    ],
+    "title": "PlannerReply",
+    "type": "object"
+   },
+   "text": "{\"plan\": {\"task\": {\"raw_objective\": \"Learn joint embeddings of tissue image patches and spot-level gene expression to enable cross-modal retrieval and prediction of gene expression from histology.\", \"tasks\": [\"joint_embedding\", \"retrieval\", \"cross_modal_prediction\"], \"primary_task\": \"retrieval\", \"pair\": [\"image\", \"expression\"], \"prediction\": {\"source\": \"image\", \"target\": \"expression\"}, \"label_column\": \"label\", \"label_evidence\": \"'label' is the only label column; used for evaluation only (not named in the objective)\", \"modality_mentions\": {\"image\": [\"image\", \"patches\", \"histology\"], \"expression\": [\"gene\", \"gene expression\", \"expression\"]}, \"evidence\": {\"retrieval\": [\"retrieval\"], \"joint_embedding\": [\"joint embeddings\"], \"cross_modal_prediction\": [\"prediction of gene expression from histology\"]}, \"source\": \"llm\"}, \"split\": {\"strategy\": \"grouped_kfold\", \"group_column\": \"patient\", \"n_folds\": 4, \"val_fraction\": 0.1, \"test_fraction\": 0.2, \"stratify_column\": \"label\"}, \"configs\": [{\"name\": \"primary\", \"role\": \"primary\", \"strategy\": \"contrastive_alignment\", \"fusion\": \"joint\", \"modalities\": [{\"modality\": \"image\", \"encoder\": \"phikon\", \"regime\": \"frozen\", \"trainable_blocks\": 0, \"patch_context\": 1, \"colour_normalisation\": \"reinhard\", \"greyscale_to_rgb\": false, \"augment\": false, \"text_max_tokens\": null, \"text_cleaning\": \"basic\", \"n_variable_features\": null, \"matrix_input\": null, \"pca_components\": null}, {\"modality\": \"expression\", \"encoder\": \"mlp\", \"regime\": \"from_scratch\", \"trainable_blocks\": 0, \"patch_context\": null, \"colour_normalisation\": \"none\", \"greyscale_to_rgb\": false, \"augment\": false, \"text_max_tokens\": null, \"text_cleaning\": \"basic\", \"n_variable_features\": 2000, \"matrix_input\": \"pca\", \"pca_components\": 100}], \"losses\": [{\"name\": \"soft_infonce\", \"weight\": 1}, {\"name\": \"cross_modal_regression\", \"weight\": 1}], \"head\": {\"embed_dim\": 256, \"hidden_dim\": 512, \"n_layers\": 2, \"dropout\": 0.1}, \"training\": {\"batch_size\": 512, \"lr\": 0.001, \"weight_decay\": 0.0001, \"max_epochs\": 300, \"patience\": 15, \"temperature_init\": 0.07, \"learnable_temperature\": true, \"soft_target_temperature\": 0.1, \"finetune_lr\": 1e-05, \"train_seconds\": 180}, \"rationale\": \"Frozen phikon (best screening on recall@10, ridge R2 and probe F1) + MLP on 100 expression PCs; soft InfoNCE because 23% of expression spots have near-twins; joint regression head for image->expression prediction.\"}, {\"name\": \"hard_infonce\", \"role\": \"comparison\", \"strategy\": \"contrastive_alignment\", \"fusion\": \"joint\", \"modalities\": [{\"modality\": \"image\", \"encoder\": \"phikon\", \"regime\": \"frozen\", \"trainable_blocks\": 0, \"patch_context\": 1, \"colour_normalisation\": \"reinhard\", \"greyscale_to_rgb\": false, \"augment\": false, \"text_max_tokens\": null, \"text_cleaning\": \"basic\", \"n_variable_features\": null, \"matrix_input\": null, \"pca_components\": null}, {\"modality\": \"expression\", \"encoder\": \"mlp\", \"regime\": \"from_scratch\", \"trainable_blocks\": 0, \"patch_context\": null, \"colour_normalisation\": \"none\", \"greyscale_to_rgb\": false, \"augment\": false, \"text_max_tokens\": null, \"text_cleaning\": \"basic\", \"n_variable_features\": 2000, \"matrix_input\": \"pca\", \"pca_components\": 100}], \"losses\": [{\"name\": \"infonce\", \"weight\": 1}, {\"name\": \"cross_modal_regression\", \"weight\": 1}], \"head\": {\"embed_dim\": 256, \"hidden_dim\": 512, \"n_layers\": 2, \"dropout\": 0.1}, \"training\": {\"batch_size\": 512, \"lr\": 0.001, \"weight_decay\": 0.0001, \"max_epochs\": 300, \"patience\": 15, \"temperature_init\": 0.07, \"learnable_temperature\": true, \"soft_target_temperature\": 0.1, \"finetune_lr\": 1e-05, \"train_seconds\": 135}, \"rationale\": \"Tests the soft-target decision (near-twin fraction 0.232).\"}, {\"name\": \"patch_context_2x\", \"role\": \"comparison\", \"strategy\": \"contrastive_alignment\", \"fusion\": \"joint\", \"modalities\": [{\"modality\": \"image\", \"encoder\": \"phikon\", \"regime\": \"frozen\", \"trainable_blocks\": 0, \"patch_context\": 2, \"colour_normalisation\": \"reinhard\", \"greyscale_to_rgb\": false, \"augment\": false, \"text_max_tokens\": null, \"text_cleaning\": \"basic\", \"n_variable_features\": null, \"matrix_input\": null, \"pca_components\": null}, {\"modality\": \"expression\", \"encoder\": \"mlp\", \"regime\": \"from_scratch\", \"trainable_blocks\": 0, \"patch_context\": null, \"colour_normalisation\": \"none\", \"greyscale_to_rgb\": false, \"augment\": false, \"text_max_tokens\": null, \"text_cleaning\": \"basic\", \"n_variable_features\": 2000, \"matrix_input\": \"pca\", \"pca_components\": 100}], \"losses\": [{\"name\": \"soft_infonce\", \"weight\": 1}, {\"name\": \"cross_modal_regression\", \"weight\": 1}], \"head\": {\"embed_dim\": 256, \"hidden_dim\": 512, \"n_layers\": 2, \"dropout\": 0.1}, \"training\": {\"batch_size\": 512, \"lr\": 0.001, \"weight_decay\": 0.0001, \"max_epochs\": 300, \"patience\": 15, \"temperature_init\": 0.07, \"learnable_temperature\": true, \"soft_target_temperature\": 0.1, \"finetune_lr\": 1e-05, \"train_seconds\": 135}, \"rationale\": \"Tests the patch-size decision: spot spacing is 1.88x the spot diameter, so a 2x patch adds surrounding tissue context up to about the neighbouring spots without overlapping their centres.\"}], \"evaluation\": {\"primary_metric\": \"retrieval_mean_recall_at_10\", \"metrics\": [\"retrieval_recall_at_k\", \"prediction_pearson\", \"linear_probe\", \"knn_accuracy\", \"clustering_ari_nmi\", \"retrieval_label_match_at_k\", \"alignment_uniformity\", \"modality_gap\", \"effective_rank\", \"group_silhouette\"], \"baselines\": [\"unimodal\", \"chance\", \"cca\", \"ridge\", \"early_fusion\", \"late_fusion\"], \"label_column\": \"label\", \"group_column\": \"patient\", \"retrieval_ks\": [1, 5, 10], \"prediction_genes\": 50}, \"downstream\": [\"retrieval_examples\", \"cross_modal_prediction\", \"spatial_maps\"], \"rationale\": \"Contrastive alignment of frozen phikon image features and an MLP on expression PCs, with a joint image->expression regression head. Evaluation uses grouped 4-fold CV over 8 patients, against CCA, ridge, unimodal, fusion and chance baselines.\", \"source\": \"llm\"}, \"decisions\": [{\"step\": \"split\", \"decision\": \"keep grouped 4-fold CV by patient\", \"chosen\": \"grouped_kfold on 'patient', 4 folds\", \"rationale\": \"Patient explains 77% of the variance in expression PCs (group silhouette 0.63), and 36 slides are nested in 8 patients. Holding out whole patients is the only way to keep held-out data independent. Four folds (2 test patients each, 1 validation patient) leave about 8.5k training pairs per fit and fit the max_folds=4 limit. Budget: 4x(180+135+135) + 180 refit + 4x180 critic = 2700 s, exactly the total.\", \"alternatives_rejected\": [{\"option\": \"split by slide\", \"reason\": \"slides are nested in patients, so patient effects would leak across splits\"}, {\"option\": \"leave-one-patient-out\", \"reason\": \"8 folds exceed max_folds=4 and the time budget\"}]}, {\"step\": \"encoder\", \"decision\": \"adopt phikon, frozen\", \"chosen\": \"phikon\", \"rationale\": \"phikon is best on every screening metric: recall@10 0.087 (next best 0.063), ridge R2 0.215 (next best 0.184) and probe F1 0.43 (next best 0.39). Pretraining was on TCGA tiles, not on these spot patches. Because there is no zero-shot baseline, any corpus overlap could only make the frozen features slightly optimistic, not the reported baselines. With about 8.5k pairs from only 5 training patients per fold, frozen features with small heads are the low-variance choice.\", \"alternatives_rejected\": [{\"option\": \"partial fine-tuning of phikon\", \"reason\": \"too few independent groups (5 training patients) for 86M-parameter adaptation, and it would use the time needed for the comparisons\"}, {\"option\": \"biomedclip_image\", \"reason\": \"ridge R2 0.026 is far below phikon's 0.215\"}]}, {\"step\": \"losses\", \"decision\": \"adopt soft InfoNCE + regression, with hard InfoNCE as a comparison\", \"chosen\": \"soft_infonce (1.0) + cross_modal_regression (1.0)\", \"rationale\": \"23.2% of expression spots have a near-twin, so hard negatives would often be false negatives. The objective explicitly asks for prediction of expression from histology, which justifies the regression term. The labels are not named in the objective, are only 23% present and stay evaluation-only (no supervised_ce).\", \"alternatives_rejected\": [{\"option\": \"add supervised_ce on 'label'\", \"reason\": \"labels are requested only for evaluation; training on them would inflate the probe and kNN metrics\"}]}, {\"step\": \"comparison\", \"decision\": \"keep both comparisons\", \"chosen\": \"hard_infonce and patch_context_2x\", \"rationale\": \"These are the two least certain choices. Soft targets depend on a near-twin threshold. Patch size matters because spot spacing is 1.88x the diameter, so a 2x patch adds context from the gaps between spots, and expression has spatial autocorrelation (median Moran's I 0.14) that context may capture. Together they use the remaining budget exactly.\", \"alternatives_rejected\": [{\"option\": \"compare against a different image encoder\", \"reason\": \"screening already separates them clearly (0.087 vs \\u22640.063)\"}]}, {\"step\": \"evaluation\", \"decision\": \"keep retrieval recall@10 as the primary metric; keep prediction Pearson as secondary\", \"chosen\": \"retrieval_mean_recall_at_10\", \"rationale\": \"Retrieval is the first measurable task in the objective. Pearson on the top 50 genes, measured against ridge and CCA, covers the prediction goal. Group silhouette tracks how much patient effect is left in the joint space.\", \"alternatives_rejected\": []}]}",
+   "data": {
+    "plan": {
+     "task": {
+      "raw_objective": "Learn joint embeddings of tissue image patches and spot-level gene expression to enable cross-modal retrieval and prediction of gene expression from histology.",
+      "tasks": [
+       "joint_embedding",
+       "retrieval",
+       "cross_modal_prediction"
+      ],
+      "primary_task": "retrieval",
+      "pair": [
+       "image",
+       "expression"
+      ],
+      "prediction": {
+       "source": "image",
+       "target": "expression"
+      },
+      "label_column": "label",
+      "label_evidence": "'label' is the only label column; used for evaluation only (not named in the objective)",
+      "modality_mentions": {
+       "image": [
+        "image",
+        "patches",
+        "histology"
+       ],
+       "expression": [
+        "gene",
+        "gene expression",
+        "expression"
+       ]
+      },
+      "evidence": {
+       "retrieval": [
+        "retrieval"
+       ],
+       "joint_embedding": [
+        "joint embeddings"
+       ],
+       "cross_modal_prediction": [
+        "prediction of gene expression from histology"
+       ]
+      },
+      "source": "llm"
+     },
+     "split": {
+      "strategy": "grouped_kfold",
+      "group_column": "patient",
+      "n_folds": 4,
+      "val_fraction": 0.1,
+      "test_fraction": 0.2,
+      "stratify_column": "label"
+     },
+     "configs": [
+      {
+       "name": "primary",
+       "role": "primary",
+       "strategy": "contrastive_alignment",
+       "fusion": "joint",
+       "modalities": [
+        {
+         "modality": "image",
+         "encoder": "phikon",
+         "regime": "frozen",
+         "trainable_blocks": 0,
+         "patch_context": 1,
+         "colour_normalisation": "reinhard",
+         "greyscale_to_rgb": false,
+         "augment": false,
+         "text_max_tokens": null,
+         "text_cleaning": "basic",
+         "n_variable_features": null,
+         "matrix_input": null,
+         "pca_components": null
+        },
+        {
+         "modality": "expression",
+         "encoder": "mlp",
+         "regime": "from_scratch",
+         "trainable_blocks": 0,
+         "patch_context": null,
+         "colour_normalisation": "none",
+         "greyscale_to_rgb": false,
+         "augment": false,
+         "text_max_tokens": null,
+         "text_cleaning": "basic",
+         "n_variable_features": 2000,
+         "matrix_input": "pca",
+         "pca_components": 100
+        }
+       ],
+       "losses": [
+        {
+         "name": "soft_infonce",
+         "weight": 1
+        },
+        {
+         "name": "cross_modal_regression",
+         "weight": 1
+        }
+       ],
+       "head": {
+        "embed_dim": 256,
+        "hidden_dim": 512,
+        "n_layers": 2,
+        "dropout": 0.1
+       },
+       "training": {
+        "batch_size": 512,
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "max_epochs": 300,
+        "patience": 15,
+        "temperature_init": 0.07,
+        "learnable_temperature": true,
+        "soft_target_temperature": 0.1,
+        "finetune_lr": 1e-05,
+        "train_seconds": 180
+       },
+       "rationale": "Frozen phikon (best screening on recall@10, ridge R2 and probe F1) + MLP on 100 expression PCs; soft InfoNCE because 23% of expression spots have near-twins; joint regression head for image->expression prediction."
+      },
+      {
+       "name": "hard_infonce",
+       "role": "comparison",
+       "strategy": "contrastive_alignment",
+       "fusion": "joint",
+       "modalities": [
+        {
+         "modality": "image",
+         "encoder": "phikon",
+         "regime": "frozen",
+         "trainable_blocks": 0,
+         "patch_context": 1,
+         "colour_normalisation": "reinhard",
+         "greyscale_to_rgb": false,
+         "augment": false,
+         "text_max_tokens": null,
+         "text_cleaning": "basic",
+         "n_variable_features": null,
+         "matrix_input": null,
+         "pca_components": null
+        },
+        {
+         "modality": "expression",
+         "encoder": "mlp",
+         "regime": "from_scratch",
+         "trainable_blocks": 0,
+         "patch_context": null,
+         "colour_normalisation": "none",
+         "greyscale_to_rgb": false,
+         "augment": false,
+         "text_max_tokens": null,
+         "text_cleaning": "basic",
+         "n_variable_features": 2000,
+         "matrix_input": "pca",
+         "pca_components": 100
+        }
+       ],
+       "losses": [
+        {
+         "name": "infonce",
+         "weight": 1
+        },
+        {
+         "name": "cross_modal_regression",
+         "weight": 1
+        }
+       ],
+       "head": {
+        "embed_dim": 256,
+        "hidden_dim": 512,
+        "n_layers": 2,
+        "dropout": 0.1
+       },
+       "training": {
+        "batch_size": 512,
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "max_epochs": 300,
+        "patience": 15,
+        "temperature_init": 0.07,
+        "learnable_temperature": true,
+        "soft_target_temperature": 0.1,
+        "finetune_lr": 1e-05,
+        "train_seconds": 135
+       },
+       "rationale": "Tests the soft-target decision (near-twin fraction 0.232)."
+      },
+      {
+       "name": "patch_context_2x",
+       "role": "comparison",
+       "strategy": "contrastive_alignment",
+       "fusion": "joint",
+       "modalities": [
+        {
+         "modality": "image",
+         "encoder": "phikon",
+         "regime": "frozen",
+         "trainable_blocks": 0,
+         "patch_context": 2,
+         "colour_normalisation": "reinhard",
+         "greyscale_to_rgb": false,
+         "augment": false,
+         "text_max_tokens": null,
+         "text_cleaning": "basic",
+         "n_variable_features": null,
+         "matrix_input": null,
+         "pca_components": null
+        },
+        {
+         "modality": "expression",
+         "encoder": "mlp",
+         "regime": "from_scratch",
+         "trainable_blocks": 0,
+         "patch_context": null,
+         "colour_normalisation": "none",
+         "greyscale_to_rgb": false,
+         "augment": false,
+         "text_max_tokens": null,
+         "text_cleaning": "basic",
+         "n_variable_features": 2000,
+         "matrix_input": "pca",
+         "pca_components": 100
+        }
+       ],
+       "losses": [
+        {
+         "name": "soft_infonce",
+         "weight": 1
+        },
+        {
+         "name": "cross_modal_regression",
+         "weight": 1
+        }
+       ],
+       "head": {
+        "embed_dim": 256,
+        "hidden_dim": 512,
+        "n_layers": 2,
+        "dropout": 0.1
+       },
+       "training": {
+        "batch_size": 512,
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "max_epochs": 300,
+        "patience": 15,
+        "temperature_init": 0.07,
+        "learnable_temperature": true,
+        "soft_target_temperature": 0.1,
+        "finetune_lr": 1e-05,
+        "train_seconds": 135
+       },
+       "rationale": "Tests the patch-size decision: spot spacing is 1.88x the spot diameter, so a 2x patch adds surrounding tissue context up to about the neighbouring spots without overlapping their centres."
+      }
+     ],
+     "evaluation": {
+      "primary_metric": "retrieval_mean_recall_at_10",
+      "metrics": [
+       "retrieval_recall_at_k",
+       "prediction_pearson",
+       "linear_probe",
+       "knn_accuracy",
+       "clustering_ari_nmi",
+       "retrieval_label_match_at_k",
+       "alignment_uniformity",
+       "modality_gap",
+       "effective_rank",
+       "group_silhouette"
+      ],
+      "baselines": [
+       "unimodal",
+       "chance",
+       "cca",
+       "ridge",
+       "early_fusion",
+       "late_fusion"
+      ],
+      "label_column": "label",
+      "group_column": "patient",
+      "retrieval_ks": [
+       1,
+       5,
+       10
+      ],
+      "prediction_genes": 50
+     },
+     "downstream": [
+      "retrieval_examples",
+      "cross_modal_prediction",
+      "spatial_maps"
+     ],
+     "rationale": "Contrastive alignment of frozen phikon image features and an MLP on expression PCs, with a joint image->expression regression head. Evaluation uses grouped 4-fold CV over 8 patients, against CCA, ridge, unimodal, fusion and chance baselines.",
+     "source": "llm"
+    },
+    "decisions": [
+     {
+      "step": "split",
+      "decision": "keep grouped 4-fold CV by patient",
+      "chosen": "grouped_kfold on 'patient', 4 folds",
+      "rationale": "Patient explains 77% of the variance in expression PCs (group silhouette 0.63), and 36 slides are nested in 8 patients. Holding out whole patients is the only way to keep held-out data independent. Four folds (2 test patients each, 1 validation patient) leave about 8.5k training pairs per fit and fit the max_folds=4 limit. Budget: 4x(180+135+135) + 180 refit + 4x180 critic = 2700 s, exactly the total.",
+      "alternatives_rejected": [
+       {
+        "option": "split by slide",
+        "reason": "slides are nested in patients, so patient effects would leak across splits"
+       },
+       {
+        "option": "leave-one-patient-out",
+        "reason": "8 folds exceed max_folds=4 and the time budget"
+       }
+      ]
+     },
+     {
+      "step": "encoder",
+      "decision": "adopt phikon, frozen",
+      "chosen": "phikon",
+      "rationale": "phikon is best on every screening metric: recall@10 0.087 (next best 0.063), ridge R2 0.215 (next best 0.184) and probe F1 0.43 (next best 0.39). Pretraining was on TCGA tiles, not on these spot patches. Because there is no zero-shot baseline, any corpus overlap could only make the frozen features slightly optimistic, not the reported baselines. With about 8.5k pairs from only 5 training patients per fold, frozen features with small heads are the low-variance choice.",
+      "alternatives_rejected": [
+       {
+        "option": "partial fine-tuning of phikon",
+        "reason": "too few independent groups (5 training patients) for 86M-parameter adaptation, and it would use the time needed for the comparisons"
+       },
+       {
+        "option": "biomedclip_image",
+        "reason": "ridge R2 0.026 is far below phikon's 0.215"
+       }
+      ]
+     },
+     {
+      "step": "losses",
+      "decision": "adopt soft InfoNCE + regression, with hard InfoNCE as a comparison",
+      "chosen": "soft_infonce (1.0) + cross_modal_regression (1.0)",
+      "rationale": "23.2% of expression spots have a near-twin, so hard negatives would often be false negatives. The objective explicitly asks for prediction of expression from histology, which justifies the regression term. The labels are not named in the objective, are only 23% present and stay evaluation-only (no supervised_ce).",
+      "alternatives_rejected": [
+       {
+        "option": "add supervised_ce on 'label'",
+        "reason": "labels are requested only for evaluation; training on them would inflate the probe and kNN metrics"
+       }
+      ]
+     },
+     {
+      "step": "comparison",
+      "decision": "keep both comparisons",
+      "chosen": "hard_infonce and patch_context_2x",
+      "rationale": "These are the two least certain choices. Soft targets depend on a near-twin threshold. Patch size matters because spot spacing is 1.88x the diameter, so a 2x patch adds context from the gaps between spots, and expression has spatial autocorrelation (median Moran's I 0.14) that context may capture. Together they use the remaining budget exactly.",
+      "alternatives_rejected": [
+       {
+        "option": "compare against a different image encoder",
+        "reason": "screening already separates them clearly (0.087 vs \u22640.063)"
+       }
+      ]
+     },
+     {
+      "step": "evaluation",
+      "decision": "keep retrieval recall@10 as the primary metric; keep prediction Pearson as secondary",
+      "chosen": "retrieval_mean_recall_at_10",
+      "rationale": "Retrieval is the first measurable task in the objective. Pearson on the top 50 genes, measured against ridge and CCA, covers the prediction goal. Group silhouette tracks how much patient effect is left in the joint space.",
+      "alternatives_rejected": []
+     }
+    ]
+   }
+  },
+  {
+   "key": "critic_7c19d2f7052f9870.json",
+   "role": "critic",
+   "sequence": 0,
+   "backend": "claude_cli",
+   "model_requested": "claude-opus-5-5",
+   "model_used": "claude-opus-5-5",
+   "seconds": 21.991808250022586,
+   "cost_usd": 0.1405864,
+   "usage": {
+    "input_tokens": 2,
+    "output_tokens": 2040,
+    "cache_read_input_tokens": 2052,
+    "cache_creation_input_tokens": 12421,
+    "stop_reason": "tool_use",
+    "models": [
+     "claude-opus-5-5"
+    ]
+   },
+   "structured": true,
+   "cached": false,
+   "note": "",
+   "response_chars": 2722,
+   "effort": "high",
+   "max_output_tokens": 16000,
+   "budget_usd_given": 2.9047,
+   "system": "You are the critic in an automated multimodal representation-learning agent. Configurations have been trained and evaluated on **validation** data; the test data have not been used yet. Your job is to judge whether the results serve the user's objective and, if not, to propose **at most one revision**. Python executes the revision on the same folds and keeps it only if the validation primary metric improves; otherwise the original result stands.\n\n## What you receive\n\n- The objective, the plan that ran (primary and comparison configurations) and a data-profile summary.\n- Training summaries per configuration and fold: best epoch, epochs run, why training stopped, final temperature, training and validation loss.\n- Validation results:\n  - the primary metric for every configuration and baseline;\n  - comparisons of the primary against each baseline, with across-fold spread or bootstrap intervals;\n  - plain-language flags.\n- Deterministic triggers, already computed, each with a suggested remedy. The possible triggers are:\n  - a comparison beating the primary;\n  - a linear or unimodal baseline beating the primary;\n  - overfitting or underfitting in the training curves;\n  - embedding collapse;\n  - batch confounding.\n- The allowed revision actions, the editable fields with their ranges, and the remaining compute.\n\n## How to judge\n\n- **Prefer no revision** when results are adequate for the objective, or when no available change is likely to help within budget. A revision costs compute and can make things worse.\n- **Do not chase noise.** A difference whose interval includes zero, or that changes sign across folds, is not a reason to revise.\n- **Read every score against its baseline and chance level.** Retrieval near chance on held-out groups can be expected when samples within a group look alike; label-level agreement may still be informative.\n- **The two possible actions:**\n  - `switch_primary`: promote a comparison configuration that did clearly better on the primary metric.\n  - `modify_primary`: change specific fields of the primary configuration. Examples:\n    - more regularisation (dropout, weight decay, a smaller head) when validation scores peak early and then fall;\n    - more epochs or time, when budget remains and training stopped on a cap while still improving;\n    - a warmer, fixed temperature when embeddings collapse;\n    - colour normalisation when embeddings group by batch;\n    - a larger weight on the regression term when a linear predictor beats the trained head.\n- **Be explicit about uncertainty**, and name the metric you expect to move.\n\n## Output\n\nReturn a single JSON object:\n\n```json\n{\n  \"assessment\": \"2-4 sentences: are the results adequate for the objective? cite validation numbers against baselines and chance\",\n  \"action\": \"none | modify_primary | switch_primary\",\n  \"target_config\": \"for switch_primary: the comparison configuration to promote\",\n  \"changes\": [{\"path\": \"training.lr\", \"value\": 0.0005}],\n  \"rationale\": \"why this action, citing metrics and training summaries\",\n  \"alternatives_rejected\": [{\"option\": \"...\", \"reason\": \"...\"}],\n  \"expected_effect\": \"which validation metric should move, and in which direction\"\n}\n```\n\n**Changes.** For `modify_primary`, each change's `path` must be one of the editable fields listed, and its value must lie in the listed range.\n- `loss.<name>.weight` sets the weight of a loss term. It adds the term if absent; 0 removes it.\n- `modalities.<modality>.<field>` edits one modality's preprocessing.\n",
+   "user": "Review this run.\n\n{\n \"objective\": \"Learn joint embeddings of tissue image patches and spot-level gene expression to enable cross-modal retrieval and prediction of gene expression from histology.\",\n \"profile_summary\": \"spatial_anndata; n=13,620; expression (matrix, 13,619), spatial (spatial, 13,620), image (image, 13,620); label 'label' 6 classes on 23% of samples; 8 'patient' groups\",\n \"plan\": {\n  \"task\": {\n   \"raw_objective\": \"Learn joint embeddings of tissue image patches and spot-level gene expression to enable cross-modal retrieval and prediction of gene expression from histology.\",\n   \"tasks\": [\n    \"joint_embedding\",\n    \"retrieval\",\n    \"cross_modal_prediction\"\n   ],\n   \"primary_task\": \"retrieval\",\n   \"pair\": [\n    \"image\",\n    \"expression\"\n   ],\n   \"prediction\": {\n    \"source\": \"image\",\n    \"target\": \"expression\"\n   },\n   \"label_column\": \"label\",\n   \"label_evidence\": \"'label' is the only label column; used for evaluation only (not named in the objective)\",\n   \"modality_mentions\": {\n    \"image\": [\n     \"image\",\n     \"patches\",\n     \"histology\"\n    ],\n    \"expression\": [\n     \"gene\",\n     \"gene expression\",\n     \"expression\"\n    ]\n   },\n   \"evidence\": {\n    \"retrieval\": [\n     \"retrieval\"\n    ],\n    \"joint_embedding\": [\n     \"joint embeddings\"\n    ],\n    \"cross_modal_prediction\": [\n     \"prediction of gene expression from histology\"\n    ]\n   },\n   \"source\": \"llm\"\n  },\n  \"split\": {\n   \"strategy\": \"grouped_kfold\",\n   \"group_column\": \"patient\",\n   \"n_folds\": 4,\n   \"val_fraction\": 0.1,\n   \"test_fraction\": 0.2,\n   \"stratify_column\": \"label\"\n  },\n  \"configs\": [\n   {\n    \"name\": \"primary\",\n    \"role\": \"primary\",\n    \"strategy\": \"contrastive_alignment\",\n    \"fusion\": \"joint\",\n    \"modalities\": [\n     {\n      \"modality\": \"image\",\n      \"encoder\": \"phikon\",\n      \"regime\": \"frozen\",\n      \"trainable_blocks\": 0,\n      \"patch_context\": 1.0,\n      \"colour_normalisation\": \"reinhard\",\n      \"greyscale_to_rgb\": false,\n      \"augment\": false,\n      \"text_max_tokens\": null,\n      \"text_cleaning\": \"basic\",\n      \"n_variable_features\": null,\n      \"matrix_input\": null,\n      \"pca_components\": null\n     },\n     {\n      \"modality\": \"expression\",\n      \"encoder\": \"mlp\",\n      \"regime\": \"from_scratch\",\n      \"trainable_blocks\": 0,\n      \"patch_context\": null,\n      \"colour_normalisation\": \"none\",\n      \"greyscale_to_rgb\": false,\n      \"augment\": false,\n      \"text_max_tokens\": null,\n      \"text_cleaning\": \"basic\",\n      \"n_variable_features\": 2000,\n      \"matrix_input\": \"pca\",\n      \"pca_components\": 100\n     }\n    ],\n    \"losses\": [\n     {\n      \"name\": \"soft_infonce\",\n      \"weight\": 1.0\n     },\n     {\n      \"name\": \"cross_modal_regression\",\n      \"weight\": 1.0\n     }\n    ],\n    \"head\": {\n     \"embed_dim\": 256,\n     \"hidden_dim\": 512,\n     \"n_layers\": 2,\n     \"dropout\": 0.1\n    },\n    \"training\": {\n     \"batch_size\": 512,\n     \"lr\": 0.001,\n     \"weight_decay\": 0.0001,\n     \"max_epochs\": 300,\n     \"patience\": 15,\n     \"temperature_init\": 0.07,\n     \"learnable_temperature\": true,\n     \"soft_target_temperature\": 0.1,\n     \"finetune_lr\": 1e-05,\n     \"train_seconds\": 180.0\n    },\n    \"rationale\": \"Frozen phikon (best screening on recall@10, ridge R2 and probe F1) + MLP on 100 expression PCs; soft InfoNCE because 23% of expression spots have near-twins; joint regression head for image->expression prediction.\"\n   },\n   {\n    \"name\": \"hard_infonce\",\n    \"role\": \"comparison\",\n    \"strategy\": \"contrastive_alignment\",\n    \"fusion\": \"joint\",\n    \"modalities\": [\n     {\n      \"modality\": \"image\",\n      \"encoder\": \"phikon\",\n      \"regime\": \"frozen\",\n      \"trainable_blocks\": 0,\n      \"patch_context\": 1.0,\n      \"colour_normalisation\": \"reinhard\",\n      \"greyscale_to_rgb\": false,\n      \"augment\": false,\n      \"text_max_tokens\": null,\n      \"text_cleaning\": \"basic\",\n      \"n_variable_features\": null,\n      \"matrix_input\": null,\n      \"pca_components\": null\n     },\n     {\n      \"modality\": \"expression\",\n      \"encoder\": \"mlp\",\n      \"regime\": \"from_scratch\",\n      \"trainable_blocks\": 0,\n      \"patch_context\": null,\n      \"colour_normalisation\": \"none\",\n      \"greyscale_to_rgb\": false,\n      \"augment\": false,\n      \"text_max_tokens\": null,\n      \"text_cleaning\": \"basic\",\n      \"n_variable_features\": 2000,\n      \"matrix_input\": \"pca\",\n      \"pca_components\": 100\n     }\n    ],\n    \"losses\": [\n     {\n      \"name\": \"infonce\",\n      \"weight\": 1.0\n     },\n     {\n      \"name\": \"cross_modal_regression\",\n      \"weight\": 1.0\n     }\n    ],\n    \"head\": {\n     \"embed_dim\": 256,\n     \"hidden_dim\": 512,\n     \"n_layers\": 2,\n     \"dropout\": 0.1\n    },\n    \"training\": {\n     \"batch_size\": 512,\n     \"lr\": 0.001,\n     \"weight_decay\": 0.0001,\n     \"max_epochs\": 300,\n     \"patience\": 15,\n     \"temperature_init\": 0.07,\n     \"learnable_temperature\": true,\n     \"soft_target_temperature\": 0.1,\n     \"finetune_lr\": 1e-05,\n     \"train_seconds\": 135.0\n    },\n    \"rationale\": \"Tests the soft-target decision (near-twin fraction 0.232).\"\n   },\n   {\n    \"name\": \"patch_context_2x\",\n    \"role\": \"comparison\",\n    \"strategy\": \"contrastive_alignment\",\n    \"fusion\": \"joint\",\n    \"modalities\": [\n     {\n      \"modality\": \"image\",\n      \"encoder\": \"phikon\",\n      \"regime\": \"frozen\",\n      \"trainable_blocks\": 0,\n      \"patch_context\": 2.0,\n      \"colour_normalisation\": \"reinhard\",\n      \"greyscale_to_rgb\": false,\n      \"augment\": false,\n      \"text_max_tokens\": null,\n      \"text_cleaning\": \"basic\",\n      \"n_variable_features\": null,\n      \"matrix_input\": null,\n      \"pca_components\": null\n     },\n     {\n      \"modality\": \"expression\",\n      \"encoder\": \"mlp\",\n      \"regime\": \"from_scratch\",\n      \"trainable_blocks\": 0,\n      \"patch_context\": null,\n      \"colour_normalisation\": \"none\",\n      \"greyscale_to_rgb\": false,\n      \"augment\": false,\n      \"text_max_tokens\": null,\n      \"text_cleaning\": \"basic\",\n      \"n_variable_features\": 2000,\n      \"matrix_input\": \"pca\",\n      \"pca_components\": 100\n     }\n    ],\n    \"losses\": [\n     {\n      \"name\": \"soft_infonce\",\n      \"weight\": 1.0\n     },\n     {\n      \"name\": \"cross_modal_regression\",\n      \"weight\": 1.0\n     }\n    ],\n    \"head\": {\n     \"embed_dim\": 256,\n     \"hidden_dim\": 512,\n     \"n_layers\": 2,\n     \"dropout\": 0.1\n    },\n    \"training\": {\n     \"batch_size\": 512,\n     \"lr\": 0.001,\n     \"weight_decay\": 0.0001,\n     \"max_epochs\": 300,\n     \"patience\": 15,\n     \"temperature_init\": 0.07,\n     \"learnable_temperature\": true,\n     \"soft_target_temperature\": 0.1,\n     \"finetune_lr\": 1e-05,\n     \"train_seconds\": 135.0\n    },\n    \"rationale\": \"Tests the patch-size decision: spot spacing is 1.88x the spot diameter, so a 2x patch adds surrounding tissue context up to about the neighbouring spots without overlapping their centres.\"\n   }\n  ],\n  \"evaluation\": {\n   \"primary_metric\": \"retrieval_mean_recall_at_10\",\n   \"metrics\": [\n    \"retrieval_recall_at_k\",\n    \"prediction_pearson\",\n    \"linear_probe\",\n    \"knn_accuracy\",\n    \"clustering_ari_nmi\",\n    \"retrieval_label_match_at_k\",\n    \"alignment_uniformity\",\n    \"modality_gap\",\n    \"effective_rank\",\n    \"group_silhouette\"\n   ],\n   \"baselines\": [\n    \"unimodal\",\n    \"chance\",\n    \"cca\",\n    \"ridge\",\n    \"early_fusion\",\n    \"late_fusion\"\n   ],\n   \"label_column\": \"label\",\n   \"group_column\": \"patient\",\n   \"retrieval_ks\": [\n    1,\n    5,\n    10\n   ],\n   \"prediction_genes\": 50\n  },\n  \"downstream\": [\n   \"retrieval_examples\",\n   \"cross_modal_prediction\",\n   \"spatial_maps\"\n  ],\n  \"rationale\": \"Contrastive alignment of frozen phikon image features and an MLP on expression PCs, with a joint image->expression regression head. Evaluation uses grouped 4-fold CV over 8 patients, against CCA, ridge, unimodal, fusion and chance baselines.\"\n },\n \"validation\": {\n  \"primary_metric\": \"retrieval_mean_recall_at_10\",\n  \"n_folds\": 4,\n  \"per_fold\": {\n   \"primary\": [\n    0.0478,\n    0.016,\n    0.0306,\n    0.0398\n   ],\n   \"hard_infonce\": [\n    0.0521,\n    0.0201,\n    0.039,\n    0.0499\n   ],\n   \"patch_context_2x\": [\n    0.0495,\n    0.0174,\n    0.0349,\n    0.0423\n   ],\n   \"cca\": [\n    0.0264,\n    0.0107,\n    0.0177,\n    0.0166\n   ]\n  },\n  \"comparisons\": [\n   {\n    \"metric\": \"retrieval_mean_recall_at_10\",\n    \"primary\": \"primary\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.0335,\n    \"alternative_value\": 0.0179,\n    \"difference_mean\": 0.0157,\n    \"difference_sd\": 0.0083,\n    \"folds_primary_better\": 4,\n    \"n_folds\": 4\n   },\n   {\n    \"metric\": \"prediction_mean_pearson_top50\",\n    \"primary\": \"primary\",\n    \"alternative\": \"ridge\",\n    \"primary_value\": 0.15,\n    \"alternative_value\": 0.1524,\n    \"difference_mean\": -0.0024,\n    \"difference_sd\": 0.0142,\n    \"folds_primary_better\": 2,\n    \"n_folds\": 4\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"primary\",\n    \"alternative\": \"unimodal\",\n    \"primary_value\": 0.3148,\n    \"alternative_value\": 0.276,\n    \"difference_mean\": 0.0388,\n    \"difference_sd\": 0.0921,\n    \"folds_primary_better\": 2,\n    \"n_folds\": 4\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"primary\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.3148,\n    \"alternative_value\": 0.2824,\n    \"difference_mean\": 0.0324,\n    \"difference_sd\": 0.0464,\n    \"folds_primary_better\": 3,\n    \"n_folds\": 4\n   }\n  ],\n  \"retrieval_chance_R@10\": [\n   0.0058,\n   0.0048,\n   0.0055,\n   0.0055\n  ]\n },\n \"flags\": [\n  {\n   \"code\": \"no_clear_gain_over_ridge\",\n   \"severity\": \"info\",\n   \"metric\": \"prediction_mean_pearson_top50\",\n   \"value\": -0.0024,\n   \"message\": \"No clear difference between the primary configuration and ridge on prediction_mean_pearson_top50 (mean difference -0.002; primary better in 2/4 folds).\"\n  },\n  {\n   \"code\": \"no_clear_gain_over_unimodal\",\n   \"severity\": \"info\",\n   \"metric\": \"clustering_ari\",\n   \"value\": 0.0388,\n   \"message\": \"No clear difference between the primary configuration and unimodal on clustering_ari (mean difference +0.039; primary better in 2/4 folds).\"\n  },\n  {\n   \"code\": \"no_clear_gain_over_cca\",\n   \"severity\": \"info\",\n   \"metric\": \"clustering_ari\",\n   \"value\": 0.0324,\n   \"message\": \"No clear difference between the primary configuration and cca on clustering_ari (mean difference +0.032; primary better in 3/4 folds).\"\n  },\n  {\n   \"code\": \"comparison_better\",\n   \"severity\": \"info\",\n   \"config\": \"hard_infonce\",\n   \"value\": 0.0068,\n   \"message\": \"Comparison 'hard_infonce' scores higher than the primary on retrieval_mean_recall_at_10 (0.040 vs 0.034); within noise.\"\n  },\n  {\n   \"code\": \"comparison_better\",\n   \"severity\": \"info\",\n   \"config\": \"patch_context_2x\",\n   \"value\": 0.0025,\n   \"message\": \"Comparison 'patch_context_2x' scores higher than the primary on retrieval_mean_recall_at_10 (0.036 vs 0.034); within noise.\"\n  }\n ],\n \"training\": {\n  \"primary\": [\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 10,\n    \"best_val_score\": 0.0478,\n    \"epochs_run\": 25,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1868753,\n    \"final_temperature\": 0.0516,\n    \"train_loss_at_best\": 4.414,\n    \"val_loss_at_best\": 9.4533,\n    \"val_score\": [\n     0.0359,\n     0.0391,\n     0.0339,\n     0.0411,\n     0.0426,\n     0.0414,\n     0.0397,\n     0.0382,\n     0.0429,\n     0.0478,\n     0.0443,\n     0.04,\n     0.0417,\n     0.0403,\n     0.0426,\n     0.0408,\n     0.0406,\n     0.0452,\n     0.0429,\n     0.0435,\n     0.04,\n     0.0446,\n     0.0432,\n     0.0406,\n     0.0437\n    ],\n    \"train_loss\": [\n     5.8906,\n     5.1489,\n     4.9765,\n     4.8605,\n     4.7572,\n     4.6717,\n     4.5914,\n     4.5256,\n     4.4628,\n     4.414,\n     4.3812,\n     4.3364,\n     4.2966,\n     4.2748,\n     4.2486,\n     4.2271,\n     4.2042,\n     4.1869,\n     4.1678,\n     4.1554,\n     4.1493,\n     4.135,\n     4.124,\n     4.1065,\n     4.0981\n    ]\n   },\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 4,\n    \"best_val_score\": 0.0168,\n    \"epochs_run\": 19,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1868753,\n    \"final_temperature\": 0.0524,\n    \"train_loss_at_best\": 4.8191,\n    \"val_loss_at_best\": 8.8918,\n    \"val_score\": [\n     0.0115,\n     0.0158,\n     0.014,\n     0.0168,\n     0.013,\n     0.0123,\n     0.016,\n     0.0118,\n     0.0112,\n     0.0112,\n     0.0112,\n     0.0125,\n     0.01,\n     0.01,\n     0.0097,\n     0.01,\n     0.011,\n     0.0097,\n     0.0118\n    ],\n    \"train_loss\": [\n     6.1203,\n     5.2192,\n     4.9778,\n     4.8191,\n     4.6992,\n     4.5883,\n     4.4891,\n     4.4031,\n     4.3151,\n     4.2367,\n     4.1757,\n     4.1125,\n     4.062,\n     4.0033,\n     3.9594,\n     3.929,\n     3.8973,\n     3.872,\n     3.8526\n    ]\n   },\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 3,\n    \"best_val_score\": 0.0306,\n    \"epochs_run\": 18,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1868753,\n    \"final_temperature\": 0.0552,\n    \"train_loss_at_best\": 5.1579,\n    \"val_loss_at_best\": 8.6028,\n    \"val_score\": [\n     0.0295,\n     0.0303,\n     0.0306,\n     0.0276,\n     0.0265,\n     0.0257,\n     0.0259,\n     0.0281,\n     0.0229,\n     0.0248,\n     0.0251,\n     0.0213,\n     0.0229,\n     0.0265,\n     0.0213,\n     0.0281,\n     0.0248,\n     0.0251\n    ],\n    \"train_loss\": [\n     6.045,\n     5.323,\n     5.1579,\n     5.0556,\n     4.9721,\n     4.9109,\n     4.8468,\n     4.8036,\n     4.7419,\n     4.7104,\n     4.6666,\n     4.6304,\n     4.5966,\n     4.5743,\n     4.5512,\n     4.5235,\n     4.5055,\n     4.4879\n    ]\n   },\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 7,\n    \"best_val_score\": 0.0398,\n    \"epochs_run\": 22,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1868753,\n    \"final_temperature\": 0.0511,\n    \"train_loss_at_best\": 4.6224,\n    \"val_loss_at_best\": 8.5173,\n    \"val_score\": [\n     0.0183,\n     0.0229,\n     0.0218,\n     0.0314,\n     0.0333,\n     0.0317,\n     0.0398,\n     0.0308,\n     0.0349,\n     0.0322,\n     0.036,\n     0.0317,\n     0.0338,\n     0.0295,\n     0.0349,\n     0.0262,\n     0.0344,\n     0.0314,\n     0.0281,\n     0.0311,\n     0.0278,\n     0.0265\n    ],\n    \"train_loss\": [\n     6.1751,\n     5.2963,\n     5.0684,\n     4.9206,\n     4.805,\n     4.7081,\n     4.6224,\n     4.5426,\n     4.4715,\n     4.4079,\n     4.3527,\n     4.2916,\n     4.2446,\n     4.2,\n     4.1727,\n     4.133,\n     4.1041,\n     4.0853,\n     4.0702,\n     4.0521,\n     4.0338,\n     4.009\n    ]\n   }\n  ],\n  \"hard_infonce\": [\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 5,\n    \"best_val_score\": 0.0521,\n    \"epochs_run\": 20,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1868753,\n    \"final_temperature\": 0.0482,\n    \"train_loss_at_best\": 3.4266,\n    \"val_loss_at_best\": 8.431,\n    \"val_score\": [\n     0.0403,\n     0.0426,\n     0.0443,\n     0.0464,\n     0.0521,\n     0.0493,\n     0.0461,\n     0.0472,\n     0.0472,\n     0.0495,\n     0.0455,\n     0.0429,\n     0.0464,\n     0.0449,\n     0.0411,\n     0.0435,\n     0.0437,\n     0.0432,\n     0.0391,\n     0.0432\n    ],\n    \"train_loss\": [\n     5.5646,\n     4.3803,\n     3.9398,\n     3.6535,\n     3.4266,\n     3.2279,\n     3.0586,\n     2.8839,\n     2.7344,\n     2.5853,\n     2.4519,\n     2.3177,\n     2.2029,\n     2.1021,\n     1.9828,\n     1.8859,\n     1.799,\n     1.7247,\n     1.6442,\n     1.582\n    ]\n   },\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 4,\n    \"best_val_score\": 0.0203,\n    \"epochs_run\": 19,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1868753,\n    \"final_temperature\": 0.0508,\n    \"train_loss_at_best\": 3.9186,\n    \"val_loss_at_best\": 9.0049,\n    \"val_score\": [\n     0.0152,\n     0.016,\n     0.017,\n     0.0203,\n     0.019,\n     0.018,\n     0.0195,\n     0.0158,\n     0.0175,\n     0.016,\n     0.0168,\n     0.016,\n     0.015,\n     0.0147,\n     0.0147,\n     0.0135,\n     0.0145,\n     0.0107,\n     0.0135\n    ],\n    \"train_loss\": [\n     5.8956,\n     4.6755,\n     4.2251,\n     3.9186,\n     3.6909,\n     3.4808,\n     3.3092,\n     3.15,\n     2.9936,\n     2.845,\n     2.7281,\n     2.5926,\n     2.4632,\n     2.3317,\n     2.2379,\n     2.1239,\n     2.019,\n     1.9262,\n     1.8385\n    ]\n   },\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 3,\n    \"best_val_score\": 0.039,\n    \"epochs_run\": 18,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1868753,\n    \"final_temperature\": 0.0507,\n    \"train_loss_at_best\": 4.0809,\n    \"val_loss_at_best\": 8.4002,\n    \"val_score\": [\n     0.0232,\n     0.0333,\n     0.039,\n     0.0336,\n     0.0303,\n     0.0333,\n     0.0317,\n     0.0287,\n     0.0338,\n     0.0284,\n     0.0311,\n     0.0303,\n     0.0319,\n     0.027,\n     0.0265,\n     0.0273,\n     0.0303,\n     0.03\n    ],\n    \"train_loss\": [\n     5.7234,\n     4.5379,\n     4.0809,\n     3.7721,\n     3.5181,\n     3.3322,\n     3.1311,\n     2.9704,\n     2.794,\n     2.6553,\n     2.5157,\n     2.3833,\n     2.2577,\n     2.1486,\n     2.0486,\n     1.9419,\n     1.8234,\n     1.7448\n    ]\n   },\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 8,\n    \"best_val_score\": 0.0499,\n    \"epochs_run\": 23,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1868753,\n    \"final_temperature\": 0.0466,\n    \"train_loss_at_best\": 3.1623,\n    \"val_loss_at_best\": 7.9097,\n    \"val_score\": [\n     0.0235,\n     0.0371,\n     0.0363,\n     0.0448,\n     0.0469,\n     0.0461,\n     0.0431,\n     0.05,\n     0.0497,\n     0.05,\n     0.0459,\n     0.045,\n     0.0439,\n     0.0409,\n     0.0456,\n     0.0453,\n     0.0407,\n     0.0382,\n     0.0377,\n     0.0409,\n     0.0379,\n     0.0426,\n     0.0377\n    ],\n    \"train_loss\": [\n     5.8939,\n     4.6952,\n     4.2511,\n     3.9292,\n     3.6865,\n     3.5048,\n     3.3094,\n     3.1623,\n     3.0119,\n     2.8724,\n     2.7282,\n     2.5894,\n     2.4734,\n     2.3374,\n     2.2301,\n     2.1166,\n     2.0239,\n     1.9302,\n     1.8478,\n     1.7687,\n     1.6873,\n     1.6315,\n     1.576\n    ]\n   }\n  ],\n  \"patch_context_2x\": [\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 8,\n    \"best_val_score\": 0.0495,\n    \"epochs_run\": 23,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1868753,\n    \"final_temperature\": 0.0528,\n    \"train_loss_at_best\": 4.4438,\n    \"val_loss_at_best\": 9.2627,\n    \"val_score\": [\n     0.0316,\n     0.0385,\n     0.0406,\n     0.0446,\n     0.0435,\n     0.0452,\n     0.0435,\n     0.0495,\n     0.0455,\n     0.0417,\n     0.0461,\n     0.0472,\n     0.042,\n     0.0417,\n     0.0452,\n     0.0446,\n     0.044,\n     0.0435,\n     0.0411,\n     0.0478,\n     0.0429,\n     0.0426,\n     0.0426\n    ],\n    \"train_loss\": [\n     5.8127,\n     5.0471,\n     4.8706,\n     4.7471,\n     4.6517,\n     4.5722,\n     4.4981,\n     4.4438,\n     4.3857,\n     4.3431,\n     4.3095,\n     4.2801,\n     4.2469,\n     4.225,\n     4.2074,\n     4.1851,\n     4.1689,\n     4.1464,\n     4.1268,\n     4.1238,\n     4.1147,\n     4.0995,\n     4.0884\n    ]\n   },\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 3,\n    \"best_val_score\": 0.018,\n    \"epochs_run\": 18,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1868753,\n    \"final_temperature\": 0.0532,\n    \"train_loss_at_best\": 4.83,\n    \"val_loss_at_best\": 8.6666,\n    \"val_score\": [\n     0.0135,\n     0.0165,\n     0.018,\n     0.0163,\n     0.0173,\n     0.0158,\n     0.0163,\n     0.014,\n     0.016,\n     0.0143,\n     0.013,\n     0.0132,\n     0.0135,\n     0.0112,\n     0.0115,\n     0.01,\n     0.0095,\n     0.0092\n    ],\n    \"train_loss\": [\n     5.8956,\n     5.0601,\n     4.83,\n     4.6769,\n     4.559,\n     4.4469,\n     4.3599,\n     4.2868,\n     4.2073,\n     4.1389,\n     4.0811,\n     4.0216,\n     3.9723,\n     3.9282,\n     3.8902,\n     3.8621,\n     3.8362,\n     3.8129\n    ]\n   },\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 3,\n    \"best_val_score\": 0.0349,\n    \"epochs_run\": 18,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1868753,\n    \"final_temperature\": 0.0557,\n    \"train_loss_at_best\": 5.0675,\n    \"val_loss_at_best\": 8.5316,\n    \"val_score\": [\n     0.0267,\n     0.0303,\n     0.0349,\n     0.0314,\n     0.0265,\n     0.0278,\n     0.0289,\n     0.0284,\n     0.0297,\n     0.0311,\n     0.03,\n     0.0284,\n     0.0265,\n     0.0297,\n     0.0248,\n     0.0311,\n     0.0248,\n     0.0292\n    ],\n    \"train_loss\": [\n     5.9315,\n     5.2245,\n     5.0675,\n     4.97,\n     4.8871,\n     4.8289,\n     4.7697,\n     4.7258,\n     4.6778,\n     4.6406,\n     4.6033,\n     4.5762,\n     4.5537,\n     4.527,\n     4.5083,\n     4.4856,\n     4.4646,\n     4.4518\n    ]\n   },\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 7,\n    \"best_val_score\": 0.0423,\n    \"epochs_run\": 22,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1868753,\n    \"final_temperature\": 0.0513,\n    \"train_loss_at_best\": 4.5192,\n    \"val_loss_at_best\": 8.5227,\n    \"val_score\": [\n     0.0265,\n     0.0297,\n     0.0352,\n     0.033,\n     0.0385,\n     0.0336,\n     0.0423,\n     0.0355,\n     0.0379,\n     0.0396,\n     0.0363,\n     0.0363,\n     0.0371,\n     0.0338,\n     0.0287,\n     0.0333,\n     0.0366,\n     0.0325,\n     0.0267,\n     0.0317,\n     0.0319,\n     0.0284\n    ],\n    \"train_loss\": [\n     6.0018,\n     5.144,\n     4.9289,\n     4.7924,\n     4.6829,\n     4.599,\n     4.5192,\n     4.4441,\n     4.3784,\n     4.3224,\n     4.2724,\n     4.2217,\n     4.1803,\n     4.1425,\n     4.1067,\n     4.077,\n     4.0542,\n     4.0336,\n     4.0184,\n     4.0047,\n     3.9878,\n     3.9693\n    ]\n   }\n  ]\n },\n \"triggers\": [\n  {\n   \"code\": \"no_clear_gain_over_ridge\",\n   \"message\": \"No clear difference between the primary configuration and ridge on prediction_mean_pearson_top50 (mean difference -0.002; primary better in 2/4 folds).\",\n   \"severity\": \"info\",\n   \"config\": null,\n   \"suggested_action\": \"none\",\n   \"suggested_target\": null,\n   \"suggested_changes\": []\n  },\n  {\n   \"code\": \"no_clear_gain_over_unimodal\",\n   \"message\": \"No clear difference between the primary configuration and unimodal on clustering_ari (mean difference +0.039; primary better in 2/4 folds).\",\n   \"severity\": \"info\",\n   \"config\": null,\n   \"suggested_action\": \"none\",\n   \"suggested_target\": null,\n   \"suggested_changes\": []\n  },\n  {\n   \"code\": \"no_clear_gain_over_cca\",\n   \"message\": \"No clear difference between the primary configuration and cca on clustering_ari (mean difference +0.032; primary better in 3/4 folds).\",\n   \"severity\": \"info\",\n   \"config\": null,\n   \"suggested_action\": \"none\",\n   \"suggested_target\": null,\n   \"suggested_changes\": []\n  },\n  {\n   \"code\": \"comparison_better\",\n   \"message\": \"Comparison 'hard_infonce' scores higher than the primary on retrieval_mean_recall_at_10 (0.040 vs 0.034); within noise.\",\n   \"severity\": \"info\",\n   \"config\": \"hard_infonce\",\n   \"suggested_action\": \"none\",\n   \"suggested_target\": null,\n   \"suggested_changes\": []\n  },\n  {\n   \"code\": \"comparison_better\",\n   \"message\": \"Comparison 'patch_context_2x' scores higher than the primary on retrieval_mean_recall_at_10 (0.036 vs 0.034); within noise.\",\n   \"severity\": \"info\",\n   \"config\": \"patch_context_2x\",\n   \"suggested_action\": \"none\",\n   \"suggested_target\": null,\n   \"suggested_changes\": []\n  }\n ],\n \"compute\": {\n  \"n_folds\": 4,\n  \"per_fit_seconds_cap\": 180.0,\n  \"remaining_train_seconds\": 900\n },\n \"actions\": [\n  \"none\",\n  \"modify_primary\",\n  \"switch_primary\"\n ],\n \"editable_fields\": {\n  \"head.embed_dim\": [\n   32,\n   1024\n  ],\n  \"head.hidden_dim\": [\n   64,\n   2048\n  ],\n  \"head.n_layers\": [\n   1,\n   4\n  ],\n  \"head.dropout\": [\n   0.0,\n   0.5\n  ],\n  \"training.batch_size\": [\n   16,\n   2048\n  ],\n  \"training.lr\": [\n   1e-06,\n   0.01\n  ],\n  \"training.weight_decay\": [\n   0.0,\n   0.1\n  ],\n  \"training.patience\": [\n   1,\n   50\n  ],\n  \"training.temperature_init\": [\n   0.01,\n   1.0\n  ],\n  \"training.soft_target_temperature\": [\n   0.01,\n   1.0\n  ],\n  \"training.finetune_lr\": [\n   1e-07,\n   0.0001\n  ],\n  \"training.max_epochs\": [\n   1,\n   300\n  ],\n  \"training.train_seconds\": [\n   10.0,\n   180.0\n  ],\n  \"training.learnable_temperature\": [\n   true,\n   false\n  ],\n  \"loss.cross_modal_regression.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.infonce.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.masked_denoising.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.reconstruction.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.soft_infonce.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.ssl_simclr.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.supcon.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.supervised_ce.weight\": [\n   0.0,\n   10.0\n  ],\n  \"modalities.image.encoder\": [\n   \"phikon\",\n   \"plip_image\",\n   \"biomedclip_image\",\n   \"clip_b16_image\",\n   \"dinov2_base\",\n   \"dinov2_small\",\n   \"resnet50\",\n   \"resnet18\"\n  ],\n  \"modalities.image.colour_normalisation\": [\n   \"none\",\n   \"reinhard\"\n  ],\n  \"modalities.image.patch_context\": [\n   0.5,\n   3.0\n  ],\n  \"modalities.expression.encoder\": [\n   \"mlp\"\n  ],\n  \"modalities.expression.n_variable_features\": [\n   50,\n   \"number of features\"\n  ],\n  \"modalities.expression.matrix_input\": [\n   \"log_normalised\",\n   \"pca\",\n   \"standardised\"\n  ],\n  \"modalities.expression.pca_components\": [\n   2,\n   256\n  ]\n }\n}",
+   "schema": {
+    "$defs": {
+     "Alternative": {
+      "properties": {
+       "option": {
+        "title": "Option",
+        "type": "string"
+       },
+       "reason": {
+        "title": "Reason",
+        "type": "string"
+       }
+      },
+      "required": [
+       "option",
+       "reason"
+      ],
+      "title": "Alternative",
+      "type": "object"
+     },
+     "Change": {
+      "properties": {
+       "path": {
+        "title": "Path",
+        "type": "string"
+       },
+       "value": {
+        "anyOf": [
+         {
+          "type": "number"
+         },
+         {
+          "type": "integer"
+         },
+         {
+          "type": "string"
+         },
+         {
+          "type": "boolean"
+         }
+        ],
+        "title": "Value"
+       }
+      },
+      "required": [
+       "path",
+       "value"
+      ],
+      "title": "Change",
+      "type": "object"
+     }
+    },
+    "properties": {
+     "assessment": {
+      "title": "Assessment",
+      "type": "string"
+     },
+     "action": {
+      "enum": [
+       "none",
+       "modify_primary",
+       "switch_primary"
+      ],
+      "title": "Action",
+      "type": "string"
+     },
+     "target_config": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Target Config"
+     },
+     "changes": {
+      "items": {
+       "$ref": "#/$defs/Change"
+      },
+      "title": "Changes",
+      "type": "array"
+     },
+     "rationale": {
+      "title": "Rationale",
+      "type": "string"
+     },
+     "alternatives_rejected": {
+      "items": {
+       "$ref": "#/$defs/Alternative"
+      },
+      "title": "Alternatives Rejected",
+      "type": "array"
+     },
+     "expected_effect": {
+      "default": "",
+      "title": "Expected Effect",
+      "type": "string"
+     }
+    },
+    "required": [
+     "assessment",
+     "action",
+     "rationale"
+    ],
+    "title": "CriticReply",
+    "type": "object"
+   },
+   "text": "{\"assessment\": \"The primary works but its scores are low. Its validation mean recall@10 is 0.0335, about 6x chance (\\u22480.0054). It beats CCA (0.0179) in 4/4 folds, by +0.016 \\u00b1 0.008. For image-to-expression prediction it only ties ridge: Pearson on the top 50 genes is 0.150 vs 0.152, and the primary is better in just 2/4 folds. The automatic flag calls hard_infonce's gain on recall@10 'within noise', but it beat the primary in every fold: +0.0043, +0.0041, +0.0084, +0.0101 (mean +0.0067, SD \\u22480.003). patch_context_2x was also better in 4/4 folds, by less (+0.0025).\", \"action\": \"switch_primary\", \"target_config\": \"hard_infonce\", \"changes\": [], \"rationale\": \"The soft-target loss was chosen because 23% of spots have near-twins, but the evidence goes against that choice. On the same folds, hard InfoNCE gave higher recall@10 for every held-out patient group, by about 20% relative (0.040 vs 0.0335). A paired comparison over four folds gives t \\u2248 4.5, which is small evidence but consistent. Switching needs no extra compute: the per-fold results already exist and already beat the primary. One caveat: all scores are best-epoch scores picked on validation, so they are slightly optimistic, but that bias is the same for both configurations. Training curves show early peaks (best epochs 3\\u201310) in every configuration, and hard InfoNCE overfits faster (train loss falls to about 1.6 while validation scores drift down). Early stopping already copes with this.\", \"alternatives_rejected\": [{\"option\": \"modify_primary: switch to infonce and add regularisation (dropout 0.3, weight_decay 0.01) and/or patch_context 2.0\", \"reason\": \"Untested combined changes. Four folds at up to 180 s each would use about 720 of the 900 s left, and the gain is unclear. Early stopping already picks epochs before the drift, so extra regularisation may not raise the best-epoch score.\"}, {\"option\": \"switch_primary to patch_context_2x\", \"reason\": \"It was also better in 4/4 folds, but by only +0.0025 vs +0.0067 for hard_infonce.\"}, {\"option\": \"none\", \"reason\": \"A comparison was better in every fold at no extra cost, so keeping the weaker loss is not justified.\"}, {\"option\": \"raise loss.cross_modal_regression.weight to beat ridge\", \"reason\": \"The gap to ridge is -0.002 and changes sign across folds, so it is noise. The primary metric is retrieval.\"}], \"expected_effect\": \"Validation retrieval_mean_recall_at_10 should rise from about 0.0335 to about 0.040, roughly 7x chance. This is uncertain: the gain is small in absolute terms and rests on 4 folds. Prediction Pearson against ridge is not reported for hard_infonce. It will probably stay near ridge (\\u22480.15), but it should be checked on the test data.\"}",
+   "data": {
+    "assessment": "The primary works but its scores are low. Its validation mean recall@10 is 0.0335, about 6x chance (\u22480.0054). It beats CCA (0.0179) in 4/4 folds, by +0.016 \u00b1 0.008. For image-to-expression prediction it only ties ridge: Pearson on the top 50 genes is 0.150 vs 0.152, and the primary is better in just 2/4 folds. The automatic flag calls hard_infonce's gain on recall@10 'within noise', but it beat the primary in every fold: +0.0043, +0.0041, +0.0084, +0.0101 (mean +0.0067, SD \u22480.003). patch_context_2x was also better in 4/4 folds, by less (+0.0025).",
+    "action": "switch_primary",
+    "target_config": "hard_infonce",
+    "changes": [],
+    "rationale": "The soft-target loss was chosen because 23% of spots have near-twins, but the evidence goes against that choice. On the same folds, hard InfoNCE gave higher recall@10 for every held-out patient group, by about 20% relative (0.040 vs 0.0335). A paired comparison over four folds gives t \u2248 4.5, which is small evidence but consistent. Switching needs no extra compute: the per-fold results already exist and already beat the primary. One caveat: all scores are best-epoch scores picked on validation, so they are slightly optimistic, but that bias is the same for both configurations. Training curves show early peaks (best epochs 3\u201310) in every configuration, and hard InfoNCE overfits faster (train loss falls to about 1.6 while validation scores drift down). Early stopping already copes with this.",
+    "alternatives_rejected": [
+     {
+      "option": "modify_primary: switch to infonce and add regularisation (dropout 0.3, weight_decay 0.01) and/or patch_context 2.0",
+      "reason": "Untested combined changes. Four folds at up to 180 s each would use about 720 of the 900 s left, and the gain is unclear. Early stopping already picks epochs before the drift, so extra regularisation may not raise the best-epoch score."
+     },
+     {
+      "option": "switch_primary to patch_context_2x",
+      "reason": "It was also better in 4/4 folds, but by only +0.0025 vs +0.0067 for hard_infonce."
+     },
+     {
+      "option": "none",
+      "reason": "A comparison was better in every fold at no extra cost, so keeping the weaker loss is not justified."
+     },
+     {
+      "option": "raise loss.cross_modal_regression.weight to beat ridge",
+      "reason": "The gap to ridge is -0.002 and changes sign across folds, so it is noise. The primary metric is retrieval."
+     }
+    ],
+    "expected_effect": "Validation retrieval_mean_recall_at_10 should rise from about 0.0335 to about 0.040, roughly 7x chance. This is uncertain: the gain is small in absolute terms and rests on 4 folds. Prediction Pearson against ridge is not reported for hard_infonce. It will probably stay near ridge (\u22480.15), but it should be checked on the test data."
+   }
+  },
+  {
+   "key": "writer_e3632f54dbbfbad4.json",
+   "role": "writer",
+   "sequence": 0,
+   "backend": "claude_cli",
+   "model_requested": "claude-opus-5-5",
+   "model_used": "claude-opus-5-5",
+   "seconds": 60.81579449999845,
+   "cost_usd": 0.3112378,
+   "usage": {
+    "input_tokens": 2,
+    "output_tokens": 6921,
+    "cache_read_input_tokens": 1569,
+    "cache_creation_input_tokens": 21562,
+    "stop_reason": "tool_use",
+    "models": [
+     "claude-opus-5-5"
+    ]
+   },
+   "structured": true,
+   "cached": false,
+   "note": "",
+   "response_chars": 13154,
+   "effort": "medium",
+   "max_output_tokens": 16000,
+   "budget_usd_given": 2.7641,
+   "system": "You are the report writer for an automated multimodal representation-learning agent. You receive the complete record of one run:\n- the objective and the data profile;\n- the decision log (every choice, its rationale and the alternatives rejected);\n- encoder screening scores and training summaries;\n- held-out test results for every configuration and baseline, with across-fold spread or bootstrap intervals;\n- comparisons against baselines and plain-language flags;\n- the critic's assessment and what happened to its revision.\n\nWrite the interpretive sections of the analysis report for a biostatistics audience. Be precise, quantitative and candid:\n\n- **Support every claim with a number from the record, and cite it.** Copy numbers as they appear in the record, rounded to at most 3 decimals or written as percentages of the recorded proportions. Do not compute new ratios, differences or percentages: the record already contains the differences that matter. Every number in your prose is checked against the record automatically, and numbers that cannot be found are flagged in the report.\n- **Read every score against its baselines and its chance level.** Report uncertainty: the spread across folds, or bootstrap intervals. Say when an interval includes zero.\n- **Answer whether integrating the modalities helped.** Compare against each modality alone, against linear alignment or ridge regression, and against fusion of unimodal features. A tie with a simpler method is a finding, not a failure.\n- **Distinguish what the evidence shows from what it does not.** Explain the warning flags, for example a pretrained model whose pretraining may overlap the evaluation data, or embeddings that group by batch.\n- **Do not invent** numbers, models, datasets or steps that are not in the record. Do not name the dataset beyond what the record says.\n\nReturn a single JSON object, and nothing else, with these keys (values are Markdown strings; use short paragraphs or bullet lists):\n\n```json\n{\n  \"executive_summary\": \"4-6 sentences: objective, what the agent decided, headline held-out results with uncertainty, bottom line\",\n  \"data_and_objective\": \"what the profile showed that mattered for the decisions\",\n  \"decisions_explained\": \"why this split, strategy, encoders, preprocessing, losses and evaluation were chosen and what was rejected (from the decision log)\",\n  \"results_interpretation\": \"retrieval, prediction, classification and clustering results read against baselines and chance\",\n  \"integration_benefit\": \"did the joint representation beat each modality alone and the linear baselines? where, by how much, how certain\",\n  \"critic_and_revision\": \"what the critic concluded, whether a revision ran, and whether it was kept\",\n  \"limitations\": \"honest limitations of this run, as a bulleted list\"\n}\n```\n",
+   "user": "Write the report sections for this run.\n\n{\n \"objective\": \"Learn joint embeddings of tissue image patches and spot-level gene expression to enable cross-modal retrieval and prediction of gene expression from histology.\",\n \"quick_mode\": false,\n \"data\": {\n  \"summary\": \"spatial_anndata; n=13,620; expression (matrix, 13,619), spatial (spatial, 13,620), image (image, 13,620); label 'label' 6 classes on 23% of samples; 8 'patient' groups\",\n  \"n_samples\": 13620,\n  \"modalities\": [\n   {\n    \"name\": \"expression\",\n    \"kind\": \"matrix\",\n    \"n_present\": 13619,\n    \"n_features\": 11871,\n    \"sparsity\": 0.827093,\n    \"integer_counts\": true,\n    \"library_size_median\": 3231.0,\n    \"near_twin_fraction\": 0.232,\n    \"group_variance_share\": 0.772078,\n    \"label_variance_share\": 0.158175,\n    \"group_silhouette\": 0.634302,\n    \"morans_i_median\": 0.144552\n   },\n   {\n    \"name\": \"spatial\",\n    \"kind\": \"spatial\",\n    \"n_present\": 13620,\n    \"n_libraries\": 36,\n    \"spacing_over_diameter\": 1.881457\n   },\n   {\n    \"name\": \"image\",\n    \"kind\": \"image\",\n    \"n_present\": 13620,\n    \"image_source\": \"spot_patches\",\n    \"domain_hint\": \"stained_tissue\",\n    \"greyscale_fraction\": 0.0,\n    \"near_duplicate_fraction\": null,\n    \"colour_between_group_share\": 0.27761,\n    \"spot_diameter_px\": 144.999994\n   }\n  ],\n  \"pairs\": {\n   \"expression|spatial\": 13619,\n   \"expression|image\": 13619,\n   \"spatial|image\": 13620\n  },\n  \"labels\": [\n   {\n    \"column\": \"label\",\n    \"n_classes\": 6,\n    \"n_labelled\": 3157,\n    \"labelled_fraction\": 0.231791,\n    \"class_counts\": {\n     \"invasive cancer\": 1758,\n     \"connective tissue\": 617,\n     \"adipose tissue\": 295,\n     \"immune infiltrate\": 252,\n     \"cancer in situ\": 138,\n     \"breast glands\": 97\n    },\n    \"imbalance_ratio\": 18.123711\n   }\n  ],\n  \"groups\": [\n   {\n    \"column\": \"patient\",\n    \"role\": \"group\",\n    \"n_levels\": 8\n   },\n   {\n    \"column\": \"slide\",\n    \"role\": \"library\",\n    \"n_levels\": 36\n   }\n  ],\n  \"cv_group\": \"patient\",\n  \"predefined_split\": null\n },\n \"task\": {\n  \"tasks\": [\n   \"joint_embedding\",\n   \"retrieval\",\n   \"cross_modal_prediction\"\n  ],\n  \"primary_task\": \"retrieval\",\n  \"pair\": [\n   \"image\",\n   \"expression\"\n  ],\n  \"prediction\": {\n   \"source\": \"image\",\n   \"target\": \"expression\"\n  },\n  \"label_column\": \"label\",\n  \"label_evidence\": \"'label' is the only label column; used for evaluation only (not named in the objective)\"\n },\n \"plan\": {\n  \"source\": \"llm\",\n  \"split\": {\n   \"strategy\": \"grouped_kfold\",\n   \"group_column\": \"patient\",\n   \"n_folds\": 4,\n   \"val_fraction\": 0.1,\n   \"test_fraction\": 0.2,\n   \"stratify_column\": \"label\"\n  },\n  \"folds\": [\n   {\n    \"name\": \"fold1\",\n    \"train\": 8709,\n    \"val\": 1726,\n    \"test\": 3184,\n    \"test_groups\": [\n     \"F\",\n     \"C\"\n    ],\n    \"val_groups\": [\n     \"H\"\n    ]\n   },\n   {\n    \"name\": \"fold2\",\n    \"train\": 7993,\n    \"val\": 2065,\n    \"test\": 3561,\n    \"test_groups\": [\n     \"E\",\n     \"D\"\n    ],\n    \"val_groups\": [\n     \"A\"\n    ]\n   },\n   {\n    \"name\": \"fold3\",\n    \"train\": 8349,\n    \"val\": 1832,\n    \"test\": 3438,\n    \"test_groups\": [\n     \"H\",\n     \"B\"\n    ],\n    \"val_groups\": [\n     \"D\"\n    ]\n   },\n   {\n    \"name\": \"fold4\",\n    \"train\": 8351,\n    \"val\": 1832,\n    \"test\": 3436,\n    \"test_groups\": [\n     \"G\",\n     \"A\"\n    ],\n    \"val_groups\": [\n     \"D\"\n    ]\n   }\n  ],\n  \"configurations\": [\n   {\n    \"name\": \"primary\",\n    \"role\": \"primary\",\n    \"strategy\": \"contrastive_alignment\",\n    \"fusion\": \"joint\",\n    \"encoders\": {\n     \"image\": \"phikon\",\n     \"expression\": \"mlp\"\n    },\n    \"regimes\": {\n     \"image\": \"frozen\",\n     \"expression\": \"from_scratch\"\n    },\n    \"losses\": {\n     \"soft_infonce\": 1.0,\n     \"cross_modal_regression\": 1.0\n    },\n    \"embed_dim\": 256,\n    \"hidden_dim\": 512,\n    \"dropout\": 0.1,\n    \"lr\": 0.001,\n    \"batch_size\": 512,\n    \"max_epochs\": 300,\n    \"train_seconds\": 180.0,\n    \"rationale\": \"Frozen phikon (best screening on recall@10, ridge R2 and probe F1) + MLP on 100 expression PCs; soft InfoNCE because 23% of expression spots have near-twins; joint regression head for image->expression prediction.\"\n   },\n   {\n    \"name\": \"hard_infonce\",\n    \"role\": \"comparison\",\n    \"strategy\": \"contrastive_alignment\",\n    \"fusion\": \"joint\",\n    \"encoders\": {\n     \"image\": \"phikon\",\n     \"expression\": \"mlp\"\n    },\n    \"regimes\": {\n     \"image\": \"frozen\",\n     \"expression\": \"from_scratch\"\n    },\n    \"losses\": {\n     \"infonce\": 1.0,\n     \"cross_modal_regression\": 1.0\n    },\n    \"embed_dim\": 256,\n    \"hidden_dim\": 512,\n    \"dropout\": 0.1,\n    \"lr\": 0.001,\n    \"batch_size\": 512,\n    \"max_epochs\": 300,\n    \"train_seconds\": 135.0,\n    \"rationale\": \"Tests the soft-target decision (near-twin fraction 0.232).\"\n   },\n   {\n    \"name\": \"patch_context_2x\",\n    \"role\": \"comparison\",\n    \"strategy\": \"contrastive_alignment\",\n    \"fusion\": \"joint\",\n    \"encoders\": {\n     \"image\": \"phikon\",\n     \"expression\": \"mlp\"\n    },\n    \"regimes\": {\n     \"image\": \"frozen\",\n     \"expression\": \"from_scratch\"\n    },\n    \"losses\": {\n     \"soft_infonce\": 1.0,\n     \"cross_modal_regression\": 1.0\n    },\n    \"embed_dim\": 256,\n    \"hidden_dim\": 512,\n    \"dropout\": 0.1,\n    \"lr\": 0.001,\n    \"batch_size\": 512,\n    \"max_epochs\": 300,\n    \"train_seconds\": 135.0,\n    \"rationale\": \"Tests the patch-size decision: spot spacing is 1.88x the spot diameter, so a 2x patch adds surrounding tissue context up to about the neighbouring spots without overlapping their centres.\"\n   }\n  ],\n  \"primary_metric\": \"retrieval_mean_recall_at_10\",\n  \"baselines\": [\n   \"unimodal\",\n   \"chance\",\n   \"cca\",\n   \"ridge\",\n   \"early_fusion\",\n   \"late_fusion\"\n  ],\n  \"downstream\": [\n   \"retrieval_examples\",\n   \"cross_modal_prediction\",\n   \"spatial_maps\"\n  ]\n },\n \"decisions\": [\n  {\n   \"step\": \"objective\",\n   \"decision\": \"parsed objective\",\n   \"chosen\": \"tasks ['joint_embedding', 'retrieval', 'cross_modal_prediction']; primary retrieval; modalities ['image', 'expression']; predict expression from image\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"retrieval: retrieval; joint_embedding: joint embeddings; cross_modal_prediction: prediction of gene expression from histology\"\n  },\n  {\n   \"step\": \"split\",\n   \"decision\": \"how to split the data\",\n   \"chosen\": \"grouped by 'patient', 4 fold(s)\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"Samples come in 8 'patient' groups; 'patient' explains 77% of the variance of the top expression components; neighbouring samples are spatially correlated (median Moran's I 0.14). Samples within a group are not independent, so whole groups are held out: grouped 4-fold cross-validation, each group tested exactly once, with one further group per fold held out for validation (early stopping and model\"\n  },\n  {\n   \"step\": \"strategy\",\n   \"decision\": \"integration strategy\",\n   \"chosen\": \"contrastive_alignment (CLIP-style)\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"The objective needs a shared space (joint_embedding, retrieval, cross_modal_prediction) and there are about 8,511 training pairs. Contrastive alignment learns that space directly from the pairing: each sample's partner is its positive and the other samples in the batch its negatives (InfoNCE, a lower bound on the mutual information between modalities).\"\n  },\n  {\n   \"step\": \"encoder\",\n   \"decision\": \"encoder for 'image'\",\n   \"chosen\": \"phikon\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"Highest screening score among 4 candidates (alignment_recall_at_10 0.087 on held-out screening samples). Screened on 2000 training and 500 validation samples from separate groups.\"\n  },\n  {\n   \"step\": \"preprocessing\",\n   \"decision\": \"'image' patch size\",\n   \"chosen\": \"1.0 x spot diameter\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"Each patch covers the spot's own footprint (145 px), the tissue its RNA was captured from; resized to the encoder's input size.\"\n  },\n  {\n   \"step\": \"preprocessing\",\n   \"decision\": \"'image' colour normalisation\",\n   \"chosen\": \"Reinhard\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"28% of the variance in mean image colour lies between groups (ICC >= 20%); a frozen encoder would encode stain/scanner differences as signal. Colour statistics are matched to the training data.\"\n  },\n  {\n   \"step\": \"encoder\",\n   \"decision\": \"encoder for 'expression'\",\n   \"chosen\": \"mlp (trained from scratch)\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"'expression' is a matrix modality; no pretrained encoder applies, so a small MLP is trained on the preprocessed features.\"\n  },\n  {\n   \"step\": \"preprocessing\",\n   \"decision\": \"'expression' features\",\n   \"chosen\": \"library-size normalisation to the median library size, then log1p; top 2,000 variable; pca\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"genes matrix, 83% zeros, median library 3,231 (integer counts): library-size normalisation to the median library size, then log1p; keep the 2,000 most variable features (fitted on training folds only); then PCA to 100 components (fitted on training data): about 8,511 training samples for 2,000 features is < 5 per feature, so compressing first reduces parameters and count noise.\"\n  },\n  {\n   \"step\": \"hyperparameters\",\n   \"decision\": \"head and training\",\n   \"chosen\": \"embed 256, batch 512, lr 0.001, dropout 0.1\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"About 8,511 training pairs: a 256-d joint space with 2-layer heads (512 hidden) is small relative to n; batch 512 gives 511 negatives per positive; early stopping on validation (patience 15) and a 180s cap per fit; temperature learned from 0.07.\"\n  },\n  {\n   \"step\": \"regime\",\n   \"decision\": \"frozen backbones or fine-tuning\",\n   \"chosen\": \"frozen\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"Frozen pretrained backbones with small trainable projection heads: few trainable parameters for the number of pairs (low variance), features computed once. Fine-tuning not tried: no pre-aligned dual encoder among the chosen encoders.\"\n  },\n  {\n   \"step\": \"comparison\",\n   \"decision\": \"comparison configuration 'hard_infonce'\",\n   \"chosen\": \"run\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"Tests the soft-target decision.\"\n  },\n  {\n   \"step\": \"comparison\",\n   \"decision\": \"comparison configuration 'patch_context_2x'\",\n   \"chosen\": \"run\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"Tests the patch-size decision (2 x spot diameter: more tissue context).\"\n  },\n  {\n   \"step\": \"evaluation\",\n   \"decision\": \"primary metric\",\n   \"chosen\": \"retrieval_mean_recall_at_10\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"First measurable task in the objective is 'retrieval'. Every metric is computed on held-out data and compared with unimodal features, linear alignment (CCA), ridge regression and chance, to show whether integration helped.\"\n  },\n  {\n   \"step\": \"split\",\n   \"decision\": \"sample selection\",\n   \"chosen\": \"1 samples lack one of the paired modalities and are not used for alignment\",\n   \"by\": \"system\",\n   \"rationale\": \"Recorded while drawing the folds.\"\n  },\n  {\n   \"step\": \"split\",\n   \"decision\": \"keep grouped 4-fold CV by patient\",\n   \"chosen\": \"grouped_kfold on 'patient', 4 folds\",\n   \"by\": \"llm\",\n   \"rationale\": \"Patient explains 77% of the variance in expression PCs (group silhouette 0.63), and 36 slides are nested in 8 patients. Holding out whole patients is the only way to keep held-out data independent. Four folds (2 test patients each, 1 validation patient) leave about 8.5k training pairs per fit and fit the max_folds=4 limit. Budget: 4x(180+135+135) + 180 refit + 4x180 critic = 2700 s, exactly the to\"\n  },\n  {\n   \"step\": \"encoder\",\n   \"decision\": \"adopt phikon, frozen\",\n   \"chosen\": \"phikon\",\n   \"by\": \"llm\",\n   \"rationale\": \"phikon is best on every screening metric: recall@10 0.087 (next best 0.063), ridge R2 0.215 (next best 0.184) and probe F1 0.43 (next best 0.39). Pretraining was on TCGA tiles, not on these spot patches. Because there is no zero-shot baseline, any corpus overlap could only make the frozen features slightly optimistic, not the reported baselines. With about 8.5k pairs from only 5 training patients \"\n  },\n  {\n   \"step\": \"losses\",\n   \"decision\": \"adopt soft InfoNCE + regression, with hard InfoNCE as a comparison\",\n   \"chosen\": \"soft_infonce (1.0) + cross_modal_regression (1.0)\",\n   \"by\": \"llm\",\n   \"rationale\": \"23.2% of expression spots have a near-twin, so hard negatives would often be false negatives. The objective explicitly asks for prediction of expression from histology, which justifies the regression term. The labels are not named in the objective, are only 23% present and stay evaluation-only (no supervised_ce).\"\n  },\n  {\n   \"step\": \"comparison\",\n   \"decision\": \"keep both comparisons\",\n   \"chosen\": \"hard_infonce and patch_context_2x\",\n   \"by\": \"llm\",\n   \"rationale\": \"These are the two least certain choices. Soft targets depend on a near-twin threshold. Patch size matters because spot spacing is 1.88x the diameter, so a 2x patch adds context from the gaps between spots, and expression has spatial autocorrelation (median Moran's I 0.14) that context may capture. Together they use the remaining budget exactly.\"\n  },\n  {\n   \"step\": \"evaluation\",\n   \"decision\": \"keep retrieval recall@10 as the primary metric; keep prediction Pearson as secondary\",\n   \"chosen\": \"retrieval_mean_recall_at_10\",\n   \"by\": \"llm\",\n   \"rationale\": \"Retrieval is the first measurable task in the objective. Pearson on the top 50 genes, measured against ridge and CCA, covers the prediction goal. Group silhouette tracks how much patient effect is left in the joint space.\"\n  },\n  {\n   \"step\": \"planner\",\n   \"decision\": \"planner used\",\n   \"chosen\": \"llm\",\n   \"by\": \"llm\",\n   \"rationale\": \"LLM adopted the rule-based proposal unchanged.\"\n  },\n  {\n   \"step\": \"split\",\n   \"decision\": \"fold fold1\",\n   \"chosen\": \"8,709 train / 1,726 validation / 3,184 test samples\",\n   \"by\": \"system\",\n   \"rationale\": \"Test groups: F, C; validation groups: H.\"\n  },\n  {\n   \"step\": \"split\",\n   \"decision\": \"fold fold2\",\n   \"chosen\": \"7,993 train / 2,065 validation / 3,561 test samples\",\n   \"by\": \"system\",\n   \"rationale\": \"Test groups: E, D; validation groups: A.\"\n  },\n  {\n   \"step\": \"split\",\n   \"decision\": \"fold fold3\",\n   \"chosen\": \"8,349 train / 1,832 validation / 3,438 test samples\",\n   \"by\": \"system\",\n   \"rationale\": \"Test groups: H, B; validation groups: D.\"\n  },\n  {\n   \"step\": \"split\",\n   \"decision\": \"fold fold4\",\n   \"chosen\": \"8,351 train / 1,832 validation / 3,436 test samples\",\n   \"by\": \"system\",\n   \"rationale\": \"Test groups: G, A; validation groups: D.\"\n  },\n  {\n   \"step\": \"critic\",\n   \"decision\": \"trigger: no_clear_gain_over_ridge\",\n   \"chosen\": \"none\",\n   \"by\": \"critic\",\n   \"rationale\": \"No clear difference between the primary configuration and ridge on prediction_mean_pearson_top50 (mean difference -0.002; primary better in 2/4 folds).\"\n  },\n  {\n   \"step\": \"critic\",\n   \"decision\": \"trigger: no_clear_gain_over_unimodal\",\n   \"chosen\": \"none\",\n   \"by\": \"critic\",\n   \"rationale\": \"No clear difference between the primary configuration and unimodal on clustering_ari (mean difference +0.039; primary better in 2/4 folds).\"\n  },\n  {\n   \"step\": \"critic\",\n   \"decision\": \"trigger: no_clear_gain_over_cca\",\n   \"chosen\": \"none\",\n   \"by\": \"critic\",\n   \"rationale\": \"No clear difference between the primary configuration and cca on clustering_ari (mean difference +0.032; primary better in 3/4 folds).\"\n  },\n  {\n   \"step\": \"critic\",\n   \"decision\": \"trigger: comparison_better\",\n   \"chosen\": \"none\",\n   \"by\": \"critic\",\n   \"rationale\": \"Comparison 'hard_infonce' scores higher than the primary on retrieval_mean_recall_at_10 (0.040 vs 0.034); within noise.\"\n  },\n  {\n   \"step\": \"critic\",\n   \"decision\": \"trigger: comparison_better\",\n   \"chosen\": \"none\",\n   \"by\": \"critic\",\n   \"rationale\": \"Comparison 'patch_context_2x' scores higher than the primary on retrieval_mean_recall_at_10 (0.036 vs 0.034); within noise.\"\n  },\n  {\n   \"step\": \"critic\",\n   \"decision\": \"revise the plan?\",\n   \"chosen\": \"promote 'hard_infonce' to primary\",\n   \"by\": \"critic\",\n   \"rationale\": \"The primary works but its scores are low. Its validation mean recall@10 is 0.0335, about 6x chance (\\u22480.0054). It beats CCA (0.0179) in 4/4 folds, by +0.016 \\u00b1 0.008. For image-to-expression prediction it only ties ridge: Pearson on the top 50 genes is 0.150 vs 0.152, and the primary is better in just 2/4 folds. The automatic flag calls hard_infonce's gain on recall@10 'within noise', but it beat th\"\n  },\n  {\n   \"step\": \"critic\",\n   \"decision\": \"keep the revision?\",\n   \"chosen\": \"kept\",\n   \"by\": \"critic\",\n   \"rationale\": \"Validation retrieval_mean_recall_at_10: revised 0.0403 vs original 0.0335 (difference +0.0068; revised better in 4 of 4 folds). Kept: the primary metric improved.\"\n  },\n  {\n   \"step\": \"evaluation\",\n   \"decision\": \"held-out test result\",\n   \"chosen\": \"retrieval_mean_recall_at_10 0.0250\",\n   \"by\": \"system\",\n   \"rationale\": \"Test data were scored once, after the critic, for 'hard_infonce' and every baseline (4 fold(s)).\"\n  }\n ],\n \"screening\": {\n  \"metric\": \"alignment_recall_at_10\",\n  \"rows\": [\n   {\n    \"image\": \"phikon\",\n    \"expression\": \"mlp\",\n    \"cca_recall_at_10\": 0.087,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.087,\n    \"ridge_r2\": 0.214593,\n    \"probe_macro_f1\": 0.432497\n   },\n   {\n    \"image\": \"plip_image\",\n    \"expression\": \"mlp\",\n    \"cca_recall_at_10\": 0.057,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.057,\n    \"ridge_r2\": 0.174862,\n    \"probe_macro_f1\": 0.340145\n   },\n   {\n    \"image\": \"biomedclip_image\",\n    \"expression\": \"mlp\",\n    \"cca_recall_at_10\": 0.063,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.063,\n    \"ridge_r2\": 0.026436,\n    \"probe_macro_f1\": 0.391965\n   },\n   {\n    \"image\": \"dinov2_base\",\n    \"expression\": \"mlp\",\n    \"cca_recall_at_10\": 0.063,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.063,\n    \"ridge_r2\": 0.18359,\n    \"probe_macro_f1\": 0.350646\n   }\n  ]\n },\n \"training\": {\n  \"primary\": [\n   {\n    \"best_epoch\": 10,\n    \"epochs_run\": 25,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.0478\n   },\n   {\n    \"best_epoch\": 4,\n    \"epochs_run\": 19,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.0168\n   },\n   {\n    \"best_epoch\": 3,\n    \"epochs_run\": 18,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.0306\n   },\n   {\n    \"best_epoch\": 7,\n    \"epochs_run\": 22,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.0398\n   }\n  ],\n  \"hard_infonce\": [\n   {\n    \"best_epoch\": 5,\n    \"epochs_run\": 20,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.0521\n   },\n   {\n    \"best_epoch\": 4,\n    \"epochs_run\": 19,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.0203\n   },\n   {\n    \"best_epoch\": 3,\n    \"epochs_run\": 18,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.039\n   },\n   {\n    \"best_epoch\": 8,\n    \"epochs_run\": 23,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.0499\n   }\n  ],\n  \"patch_context_2x\": [\n   {\n    \"best_epoch\": 8,\n    \"epochs_run\": 23,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.0495\n   },\n   {\n    \"best_epoch\": 3,\n    \"epochs_run\": 18,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.018\n   },\n   {\n    \"best_epoch\": 3,\n    \"epochs_run\": 18,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.0349\n   },\n   {\n    \"best_epoch\": 7,\n    \"epochs_run\": 22,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.0423\n   }\n  ]\n },\n \"test\": {\n  \"primary\": \"hard_infonce\",\n  \"primary_metric\": \"retrieval_mean_recall_at_10\",\n  \"n_folds\": 4,\n  \"chance_recall_at_10\": 0.002942,\n  \"gallery_size_for_recall\": 1000,\n  \"probe_chance_macro_f1\": 0.166667,\n  \"prediction_method_rule\": \"a configuration's own regression head if it has one, else kNN in its joint space; fixed in advance, never chosen on test data\",\n  \"results\": {\n   \"retrieval_mean_recall_at_10\": [\n    {\n     \"name\": \"hard_infonce\",\n     \"kind\": \"configuration\",\n     \"value\": 0.024996,\n     \"sd\": 0.002493,\n     \"lo\": 0.022503,\n     \"hi\": 0.027489,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.0221,\n      0.0239,\n      0.0262,\n      0.0278\n     ]\n    },\n    {\n     \"name\": \"patch_context_2x\",\n     \"kind\": \"configuration\",\n     \"value\": 0.020519,\n     \"sd\": 0.002022,\n     \"lo\": 0.018496,\n     \"hi\": 0.022541,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.0181,\n      0.0199,\n      0.0228,\n      0.0212\n     ]\n    },\n    {\n     \"name\": \"primary\",\n     \"kind\": \"configuration\",\n     \"value\": 0.019626,\n     \"sd\": 0.003812,\n     \"lo\": 0.015814,\n     \"hi\": 0.023439,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.0146,\n      0.0191,\n      0.0236,\n      0.0212\n     ]\n    },\n    {\n     \"name\": \"cca\",\n     \"kind\": \"baseline\",\n     \"value\": 0.01161,\n     \"sd\": 0.001564,\n     \"lo\": 0.010046,\n     \"hi\": 0.013173,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.0099,\n      0.0112,\n      0.0137,\n      0.0116\n     ]\n    }\n   ],\n   \"prediction_mean_pearson_top50\": [\n    {\n     \"name\": \"patch_context_2x:head\",\n     \"kind\": \"configuration\",\n     \"value\": 0.188444,\n     \"sd\": 0.005429,\n     \"lo\": 0.183015,\n     \"hi\": 0.193874,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1911,\n      0.1945,\n      0.186,\n      0.1822\n     ]\n    },\n    {\n     \"name\": \"ridge\",\n     \"kind\": \"baseline\",\n     \"value\": 0.179866,\n     \"sd\": 0.044578,\n     \"lo\": 0.135288,\n     \"hi\": 0.224445,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1796,\n      0.2388,\n      0.1701,\n      0.1309\n     ]\n    },\n    {\n     \"name\": \"hard_infonce:head\",\n     \"kind\": \"configuration\",\n     \"value\": 0.171211,\n     \"sd\": 0.01309,\n     \"lo\": 0.158121,\n     \"hi\": 0.184302,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.185,\n      0.1773,\n      0.1679,\n      0.1546\n     ]\n    },\n    {\n     \"name\": \"primary:head\",\n     \"kind\": \"configuration\",\n     \"value\": 0.16813,\n     \"sd\": 0.02254,\n     \"lo\": 0.14559,\n     \"hi\": 0.19067,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1952,\n      0.1706,\n      0.1667,\n      0.1401\n     ]\n    },\n    {\n     \"name\": \"patch_context_2x:knn\",\n     \"kind\": \"configuration\",\n     \"value\": 0.163996,\n     \"sd\": 0.01445,\n     \"lo\": 0.149546,\n     \"hi\": 0.178445,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1692,\n      0.1609,\n      0.1458,\n      0.1801\n     ]\n    },\n    {\n     \"name\": \"primary:knn\",\n     \"kind\": \"configuration\",\n     \"value\": 0.148807,\n     \"sd\": 0.017482,\n     \"lo\": 0.131325,\n     \"hi\": 0.166289,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1727,\n      0.1491,\n      0.1316,\n      0.1418\n     ]\n    },\n    {\n     \"name\": \"hard_infonce:knn\",\n     \"kind\": \"configuration\",\n     \"value\": 0.144311,\n     \"sd\": 0.013854,\n     \"lo\": 0.130457,\n     \"hi\": 0.158165,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1633,\n      0.1309,\n      0.1385,\n      0.1446\n     ]\n    }\n   ],\n   \"probe_macro_f1\": [\n    {\n     \"name\": \"patch_context_2x (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.367535,\n     \"sd\": 0.089957,\n     \"lo\": 0.277578,\n     \"hi\": 0.457492,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.3358,\n      0.3085,\n      0.3245,\n      0.5014\n     ]\n    },\n    {\n     \"name\": \"early_fusion (concat)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.357153,\n     \"sd\": 0.103915,\n     \"lo\": 0.253238,\n     \"hi\": 0.461068,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.3332,\n      0.2394,\n      0.3652,\n      0.4909\n     ]\n    },\n    {\n     \"name\": \"patch_context_2x (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.355649,\n     \"sd\": 0.095583,\n     \"lo\": 0.260066,\n     \"hi\": 0.451232,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.2235,\n      0.3627,\n      0.3862,\n      0.4503\n     ]\n    },\n    {\n     \"name\": \"cca (image)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.341926,\n     \"sd\": 0.09257,\n     \"lo\": 0.249356,\n     \"hi\": 0.434496,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.2469,\n      0.2783,\n      0.4256,\n      0.4169\n     ]\n    },\n    {\n     \"name\": \"unimodal (image)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.32397,\n     \"sd\": 0.068824,\n     \"lo\": 0.255146,\n     \"hi\": 0.392795,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.3203,\n      0.228,\n      0.3697,\n      0.3778\n     ]\n    },\n    {\n     \"name\": \"late_fusion (average)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.319062,\n     \"sd\": 0.099832,\n     \"lo\": 0.21923,\n     \"hi\": 0.418894,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.2997,\n      0.1885,\n      0.3693,\n      0.4188\n     ]\n    },\n    {\n     \"name\": \"primary (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.307111,\n     \"sd\": 0.055865,\n     \"lo\": 0.251246,\n     \"hi\": 0.362976,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.2729,\n      0.2521,\n      0.3274,\n      0.3761\n     ]\n    },\n    {\n     \"name\": \"hard_infonce (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.304015,\n     \"sd\": 0.077524,\n     \"lo\": 0.226491,\n     \"hi\": 0.381539,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.2378,\n      0.2386,\n      0.3508,\n      0.3888\n     ]\n    },\n    {\n     \"name\": \"hard_infonce (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.296879,\n     \"sd\": 0.112704,\n     \"lo\": 0.184176,\n     \"hi\": 0.409583,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1585,\n      0.28,\n      0.3169,\n      0.4321\n     ]\n    },\n    {\n     \"name\": \"primary (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.292233,\n     \"sd\": 0.115818,\n     \"lo\": 0.176415,\n     \"hi\": 0.408051,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.2251,\n      0.1979,\n      0.2899,\n      0.456\n     ]\n    },\n    {\n     \"name\": \"cca (fused)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.258412,\n     \"sd\": 0.160171,\n     \"lo\": 0.098241,\n     \"hi\": 0.418583,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1315,\n      0.136,\n      0.2971,\n      0.469\n     ]\n    },\n    {\n     \"name\": \"unimodal (expression)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.244807,\n     \"sd\": 0.143723,\n     \"lo\": 0.101084,\n     \"hi\": 0.38853,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.2074,\n      0.1048,\n      0.2212,\n      0.4458\n     ]\n    },\n    {\n     \"name\": \"primary (expression)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.244215,\n     \"sd\": 0.138893,\n     \"lo\": 0.105321,\n     \"hi\": 0.383108,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1946,\n      0.1285,\n      0.2078,\n      0.4459\n     ]\n    },\n    {\n     \"name\": \"hard_infonce (expression)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.243854,\n     \"sd\": 0.158114,\n     \"lo\": 0.08574,\n     \"hi\": 0.401968,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.123,\n      0.1499,\n      0.2319,\n      0.4706\n     ]\n    },\n    {\n     \"name\": \"patch_context_2x (expression)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.239329,\n     \"sd\": 0.138446,\n     \"lo\": 0.100882,\n     \"hi\": 0.377775,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1899,\n      0.1259,\n      0.2005,\n      0.441\n     ]\n    },\n    {\n     \"name\": \"cca (expression)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.229498,\n     \"sd\": 0.121411,\n     \"lo\": 0.108087,\n     \"hi\": 0.350909,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1722,\n      0.1153,\n      0.2341,\n      0.3964\n     ]\n    }\n   ],\n   \"clustering_ari\": [\n    {\n     \"name\": \"patch_context_2x (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.288446,\n     \"sd\": 0.100421,\n     \"lo\": 0.188025,\n     \"hi\": 0.388867,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.17,\n      0.2832,\n      0.2849,\n      0.4157\n     ]\n    },\n    {\n     \"name\": \"patch_context_2x (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.283085,\n     \"sd\": 0.154026,\n     \"lo\": 0.129058,\n     \"hi\": 0.437111,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.0545,\n      0.3655,\n      0.329,\n      0.3833\n     ]\n    },\n    {\n     \"name\": \"primary (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.243777,\n     \"sd\": 0.102912,\n     \"lo\": 0.140865,\n     \"hi\": 0.34669,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1773,\n      0.1415,\n      0.2917,\n      0.3646\n     ]\n    },\n    {\n     \"name\": \"hard_infonce (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.23152,\n     \"sd\": 0.07511,\n     \"lo\": 0.15641,\n     \"hi\": 0.30663,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.201,\n      0.1401,\n      0.2827,\n      0.3023\n     ]\n    },\n    {\n     \"name\": \"cca (fused)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.23072,\n     \"sd\": 0.113433,\n     \"lo\": 0.117287,\n     \"hi\": 0.344153,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.0611,\n      0.2752,\n      0.2913,\n      0.2953\n     ]\n    },\n    {\n     \"name\": \"hard_infonce (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.21533,\n     \"sd\": 0.11164,\n     \"lo\": 0.10369,\n     \"hi\": 0.32697,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.0574,\n      0.2159,\n      0.2991,\n      0.289\n     ]\n    },\n    {\n     \"name\": \"unimodal (image)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.20904,\n     \"sd\": 0.104032,\n     \"lo\": 0.105009,\n     \"hi\": 0.313072,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.0656,\n      0.2865,\n      0.2851,\n      0.199\n     ]\n    },\n    {\n     \"name\": \"primary (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.200811,\n     \"sd\": 0.123448,\n     \"lo\": 0.077363,\n     \"hi\": 0.324259,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.027,\n      0.274,\n      0.3016,\n      0.2006\n     ]\n    },\n    {\n     \"name\": \"cca (image)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.178922,\n     \"sd\": 0.106015,\n     \"lo\": 0.072907,\n     \"hi\": 0.284937,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.0273,\n      0.2417,\n      0.261,\n      0.1856\n     ]\n    },\n    {\n     \"name\": \"unimodal (expression)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.165194,\n     \"sd\": 0.072886,\n     \"lo\": 0.092308,\n     \"hi\": 0.238081,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1371,\n      0.0891,\n      0.173,\n      0.2616\n     ]\n    },\n    {\n     \"name\": \"hard_infonce (expression)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.163969,\n     \"sd\": 0.056589,\n     \"lo\": 0.10738,\n     \"hi\": 0.220558,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1903,\n      0.0845,\n      0.1663,\n      0.2148\n     ]\n    },\n    {\n     \"name\": \"primary (expression)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.157987,\n     \"sd\": 0.074539,\n     \"lo\": 0.083448,\n     \"hi\": 0.232526,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1302,\n      0.0853,\n      0.1555,\n      0.261\n     ]\n    },\n    {\n     \"name\": \"patch_context_2x (expression)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.153748,\n     \"sd\": 0.064825,\n     \"lo\": 0.088923,\n     \"hi\": 0.218574,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.1304,\n      0.0847,\n      0.1611,\n      0.2388\n     ]\n    },\n    {\n     \"name\": \"cca (expression)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.129237,\n     \"sd\": 0.076515,\n     \"lo\": 0.052721,\n     \"hi\": 0.205752,\n     \"interval\": \"\\u00b11 SD over 4 folds\",\n     \"per_fold\": [\n      0.0478,\n      0.0885,\n      0.2203,\n      0.1604\n     ]\n    }\n   ]\n  },\n  \"retrieval\": [\n   {\n    \"representation\": \"primary\",\n    \"R@1\": 0.002579,\n    \"R@5\": 0.011081,\n    \"R@10\": 0.019626,\n    \"median_rank\": 668.25,\n    \"a_to_b_R@10\": 0.022555,\n    \"b_to_a_R@10\": 0.016698,\n    \"chance_R@10\": 0.002942,\n    \"label_match_at_10\": 0.593525,\n    \"label_match_chance\": 0.448281,\n    \"gallery1000_R@10\": 0.058325\n   },\n   {\n    \"representation\": \"hard_infonce\",\n    \"R@1\": 0.003116,\n    \"R@5\": 0.013523,\n    \"R@10\": 0.024996,\n    \"median_rank\": 577.5,\n    \"a_to_b_R@10\": 0.026487,\n    \"b_to_a_R@10\": 0.023505,\n    \"chance_R@10\": 0.002942,\n    \"label_match_at_10\": 0.603959,\n    \"label_match_chance\": 0.448281,\n    \"gallery1000_R@10\": 0.067\n   },\n   {\n    \"representation\": \"patch_context_2x\",\n    \"R@1\": 0.002705,\n    \"R@5\": 0.011088,\n    \"R@10\": 0.020519,\n    \"median_rank\": 684.875,\n    \"a_to_b_R@10\": 0.020925,\n    \"b_to_a_R@10\": 0.020113,\n    \"chance_R@10\": 0.002942,\n    \"label_match_at_10\": 0.588914,\n    \"label_match_chance\": 0.448281,\n    \"gallery1000_R@10\": 0.05595\n   },\n   {\n    \"representation\": \"cca\",\n    \"R@1\": 0.001176,\n    \"R@5\": 0.00586,\n    \"R@10\": 0.01161,\n    \"median_rank\": 1047.125,\n    \"a_to_b_R@10\": 0.012248,\n    \"b_to_a_R@10\": 0.010971,\n    \"chance_R@10\": 0.002942,\n    \"label_match_at_10\": 0.531168,\n    \"label_match_chance\": 0.448281,\n    \"gallery1000_R@10\": 0.03405\n   }\n  ],\n  \"prediction\": [\n   {\n    \"method\": \"patch_context_2x:head\",\n    \"mean_r_top50\": 0.188444,\n    \"median_r_top50\": 0.175495,\n    \"mean_r_all\": 0.09867,\n    \"within_group_mean_r_top50\": 0.144433,\n    \"n_genes_r_gt_0.3\": 158.25\n   },\n   {\n    \"method\": \"ridge\",\n    \"mean_r_top50\": 0.179866,\n    \"median_r_top50\": 0.185572,\n    \"mean_r_all\": 0.093415,\n    \"within_group_mean_r_top50\": 0.145869,\n    \"n_genes_r_gt_0.3\": 137.75\n   },\n   {\n    \"method\": \"hard_infonce:head\",\n    \"mean_r_top50\": 0.171211,\n    \"median_r_top50\": 0.153902,\n    \"mean_r_all\": 0.092789,\n    \"within_group_mean_r_top50\": 0.143098,\n    \"n_genes_r_gt_0.3\": 132.75\n   },\n   {\n    \"method\": \"primary:head\",\n    \"mean_r_top50\": 0.16813,\n    \"median_r_top50\": 0.16174,\n    \"mean_r_all\": 0.092319,\n    \"within_group_mean_r_top50\": 0.14363,\n    \"n_genes_r_gt_0.3\": 134.75\n   },\n   {\n    \"method\": \"patch_context_2x:knn\",\n    \"mean_r_top50\": 0.163996,\n    \"median_r_top50\": 0.153046,\n    \"mean_r_all\": 0.084705,\n    \"within_group_mean_r_top50\": 0.138917,\n    \"n_genes_r_gt_0.3\": 113.75\n   },\n   {\n    \"method\": \"primary:knn\",\n    \"mean_r_top50\": 0.148807,\n    \"median_r_top50\": 0.149989,\n    \"mean_r_all\": 0.081658,\n    \"within_group_mean_r_top50\": 0.136495,\n    \"n_genes_r_gt_0.3\": 103.75\n   },\n   {\n    \"method\": \"hard_infonce:knn\",\n    \"mean_r_top50\": 0.144311,\n    \"median_r_top50\": 0.148332,\n    \"mean_r_all\": 0.083994,\n    \"within_group_mean_r_top50\": 0.132719,\n    \"n_genes_r_gt_0.3\": 106.25\n   }\n  ],\n  \"comparisons\": [\n   {\n    \"metric\": \"retrieval_mean_recall_at_10\",\n    \"primary\": \"hard_infonce\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.024996,\n    \"alternative_value\": 0.01161,\n    \"difference_mean\": 0.013386,\n    \"difference_sd\": 0.001851,\n    \"folds_primary_better\": 4,\n    \"n_folds\": 4\n   },\n   {\n    \"metric\": \"prediction_mean_pearson_top50\",\n    \"primary\": \"hard_infonce\",\n    \"alternative\": \"ridge\",\n    \"primary_value\": 0.171211,\n    \"alternative_value\": 0.179866,\n    \"difference_mean\": -0.008655,\n    \"difference_sd\": 0.036856,\n    \"folds_primary_better\": 2,\n    \"n_folds\": 4\n   },\n   {\n    \"metric\": \"probe_macro_f1\",\n    \"primary\": \"hard_infonce\",\n    \"alternative\": \"unimodal\",\n    \"primary_value\": 0.296879,\n    \"alternative_value\": 0.340974,\n    \"difference_mean\": -0.044094,\n    \"difference_sd\": 0.089584,\n    \"folds_primary_better\": 1,\n    \"n_folds\": 4\n   },\n   {\n    \"metric\": \"probe_macro_f1\",\n    \"primary\": \"hard_infonce\",\n    \"alternative\": \"early_fusion\",\n    \"primary_value\": 0.296879,\n    \"alternative_value\": 0.357153,\n    \"difference_mean\": -0.060274,\n    \"difference_sd\": 0.088372,\n    \"folds_primary_better\": 1,\n    \"n_folds\": 4\n   },\n   {\n    \"metric\": \"probe_macro_f1\",\n    \"primary\": \"hard_infonce\",\n    \"alternative\": \"late_fusion\",\n    \"primary_value\": 0.296879,\n    \"alternative_value\": 0.319062,\n    \"difference_mean\": -0.022183,\n    \"difference_sd\": 0.098797,\n    \"folds_primary_better\": 2,\n    \"n_folds\": 4\n   },\n   {\n    \"metric\": \"probe_macro_f1\",\n    \"primary\": \"hard_infonce\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.296879,\n    \"alternative_value\": 0.258412,\n    \"difference_mean\": 0.038468,\n    \"difference_sd\": 0.075999,\n    \"folds_primary_better\": 3,\n    \"n_folds\": 4\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"hard_infonce\",\n    \"alternative\": \"unimodal\",\n    \"primary_value\": 0.23152,\n    \"alternative_value\": 0.242561,\n    \"difference_mean\": -0.011041,\n    \"difference_sd\": 0.094334,\n    \"folds_primary_better\": 2,\n    \"n_folds\": 4\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"hard_infonce\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.23152,\n    \"alternative_value\": 0.23072,\n    \"difference_mean\": 0.0008,\n    \"difference_sd\": 0.112486,\n    \"folds_primary_better\": 2,\n    \"n_folds\": 4\n   }\n  ],\n  \"flags\": [\n   {\n    \"code\": \"no_clear_gain_over_ridge\",\n    \"severity\": \"info\",\n    \"metric\": \"prediction_mean_pearson_top50\",\n    \"value\": -0.008655,\n    \"message\": \"No clear difference between the primary configuration and ridge on prediction_mean_pearson_top50 (mean difference -0.009; primary better in 2/4 folds).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_unimodal\",\n    \"severity\": \"info\",\n    \"metric\": \"probe_macro_f1\",\n    \"value\": -0.044094,\n    \"message\": \"No clear difference between the primary configuration and unimodal on probe_macro_f1 (mean difference -0.044; primary better in 1/4 folds).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_early_fusion\",\n    \"severity\": \"info\",\n    \"metric\": \"probe_macro_f1\",\n    \"value\": -0.060274,\n    \"message\": \"No clear difference between the primary configuration and early_fusion on probe_macro_f1 (mean difference -0.060; primary better in 1/4 folds).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_late_fusion\",\n    \"severity\": \"info\",\n    \"metric\": \"probe_macro_f1\",\n    \"value\": -0.022183,\n    \"message\": \"No clear difference between the primary configuration and late_fusion on probe_macro_f1 (mean difference -0.022; primary better in 2/4 folds).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_cca\",\n    \"severity\": \"info\",\n    \"metric\": \"probe_macro_f1\",\n    \"value\": 0.038468,\n    \"message\": \"No clear difference between the primary configuration and cca on probe_macro_f1 (mean difference +0.038; primary better in 3/4 folds).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_unimodal\",\n    \"severity\": \"info\",\n    \"metric\": \"clustering_ari\",\n    \"value\": -0.011041,\n    \"message\": \"No clear difference between the primary configuration and unimodal on clustering_ari (mean difference -0.011; primary better in 2/4 folds).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_cca\",\n    \"severity\": \"info\",\n    \"metric\": \"clustering_ari\",\n    \"value\": 0.0008,\n    \"message\": \"No clear difference between the primary configuration and cca on clustering_ari (mean difference +0.001; primary better in 2/4 folds).\"\n   },\n   {\n    \"code\": \"batch_confounding\",\n    \"severity\": \"warning\",\n    \"value\": 0.397399,\n    \"message\": \"Held-out embeddings cluster more by group (silhouette 0.40) than by label (0.09).\"\n   }\n  ]\n },\n \"validation\": {\n  \"comparisons\": [\n   {\n    \"metric\": \"retrieval_mean_recall_at_10\",\n    \"primary\": \"primary\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.033548,\n    \"alternative_value\": 0.017851,\n    \"difference_mean\": 0.015697,\n    \"difference_sd\": 0.008266,\n    \"folds_primary_better\": 4,\n    \"n_folds\": 4\n   },\n   {\n    \"metric\": \"prediction_mean_pearson_top50\",\n    \"primary\": \"primary\",\n    \"alternative\": \"ridge\",\n    \"primary_value\": 0.150018,\n    \"alternative_value\": 0.152394,\n    \"difference_mean\": -0.002376,\n    \"difference_sd\": 0.014156,\n    \"folds_primary_better\": 2,\n    \"n_folds\": 4\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"primary\",\n    \"alternative\": \"unimodal\",\n    \"primary_value\": 0.314798,\n    \"alternative_value\": 0.276007,\n    \"difference_mean\": 0.038792,\n    \"difference_sd\": 0.092062,\n    \"folds_primary_better\": 2,\n    \"n_folds\": 4\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"primary\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.314798,\n    \"alternative_value\": 0.282394,\n    \"difference_mean\": 0.032404,\n    \"difference_sd\": 0.046369,\n    \"folds_primary_better\": 3,\n    \"n_folds\": 4\n   }\n  ],\n  \"flags\": [\n   {\n    \"code\": \"no_clear_gain_over_ridge\",\n    \"severity\": \"info\",\n    \"metric\": \"prediction_mean_pearson_top50\",\n    \"value\": -0.002376,\n    \"message\": \"No clear difference between the primary configuration and ridge on prediction_mean_pearson_top50 (mean difference -0.002; primary better in 2/4 folds).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_unimodal\",\n    \"severity\": \"info\",\n    \"metric\": \"clustering_ari\",\n    \"value\": 0.038792,\n    \"message\": \"No clear difference between the primary configuration and unimodal on clustering_ari (mean difference +0.039; primary better in 2/4 folds).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_cca\",\n    \"severity\": \"info\",\n    \"metric\": \"clustering_ari\",\n    \"value\": 0.032404,\n    \"message\": \"No clear difference between the primary configuration and cca on clustering_ari (mean difference +0.032; primary better in 3/4 folds).\"\n   },\n   {\n    \"code\": \"comparison_better\",\n    \"severity\": \"info\",\n    \"config\": \"hard_infonce\",\n    \"value\": 0.006755,\n    \"message\": \"Comparison 'hard_infonce' scores higher than the primary on retrieval_mean_recall_at_10 (0.040 vs 0.034); within noise.\"\n   },\n   {\n    \"code\": \"comparison_better\",\n    \"severity\": \"info\",\n    \"config\": \"patch_context_2x\",\n    \"value\": 0.002504,\n    \"message\": \"Comparison 'patch_context_2x' scores higher than the primary on retrieval_mean_recall_at_10 (0.036 vs 0.034); within noise.\"\n   }\n  ]\n },\n \"critic\": {\n  \"action\": \"switch_primary\",\n  \"target\": \"hard_infonce\",\n  \"changes\": {},\n  \"assessment\": \"The primary works but its scores are low. Its validation mean recall@10 is 0.0335, about 6x chance (\\u22480.0054). It beats CCA (0.0179) in 4/4 folds, by +0.016 \\u00b1 0.008. For image-to-expression prediction it only ties ridge: Pearson on the top 50 genes is 0.150 vs 0.152, and the primary is better in just 2/4 folds. The automatic flag calls hard_infonce's gain on recall@10 'within noise', but it beat the primary in every fold: +0.0043, +0.0041, +0.0084, +0.0101 (mean +0.0067, SD \\u22480.003). patch_context_2x was also better in 4/4 folds, by less (+0.0025).\",\n  \"rationale\": \"The soft-target loss was chosen because 23% of spots have near-twins, but the evidence goes against that choice. On the same folds, hard InfoNCE gave higher recall@10 for every held-out patient group, by about 20% relative (0.040 vs 0.0335). A paired comparison over four folds gives t \\u2248 4.5, which is small evidence but consistent. Switching needs no extra compute: the per-fold results already exist and already beat the primary. One caveat: all scores are best-epoch scores picked on validation, so they are slightly optimistic, but that bias is the same for both configurations. Training curves show early peaks (best epochs 3\\u201310) in every configuration, and hard InfoNCE overfits faster (train loss falls to about 1.6 while validation scores drift down). Early stopping already copes with this.\",\n  \"source\": \"llm\",\n  \"triggers\": [\n   {\n    \"code\": \"no_clear_gain_over_ridge\",\n    \"severity\": \"info\",\n    \"message\": \"No clear difference between the primary configuration and ridge on prediction_mean_pearson_top50 (mean difference -0.002; primary better in 2/4 folds).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_unimodal\",\n    \"severity\": \"info\",\n    \"message\": \"No clear difference between the primary configuration and unimodal on clustering_ari (mean difference +0.039; primary better in 2/4 folds).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_cca\",\n    \"severity\": \"info\",\n    \"message\": \"No clear difference between the primary configuration and cca on clustering_ari (mean difference +0.032; primary better in 3/4 folds).\"\n   },\n   {\n    \"code\": \"comparison_better\",\n    \"severity\": \"info\",\n    \"message\": \"Comparison 'hard_infonce' scores higher than the primary on retrieval_mean_recall_at_10 (0.040 vs 0.034); within noise.\"\n   },\n   {\n    \"code\": \"comparison_better\",\n    \"severity\": \"info\",\n    \"message\": \"Comparison 'patch_context_2x' scores higher than the primary on retrieval_mean_recall_at_10 (0.036 vs 0.034); within noise.\"\n   }\n  ]\n },\n \"revision\": {\n  \"action\": \"switch_primary\",\n  \"ran\": true,\n  \"kept\": true,\n  \"original_val\": [\n   0.047798,\n   0.015981,\n   0.030568,\n   0.039847\n  ],\n  \"original_val_mean\": 0.033548,\n  \"target\": \"hard_infonce\",\n  \"revised_val\": [\n   0.052144,\n   0.020097,\n   0.039028,\n   0.049945\n  ],\n  \"revised_val_mean\": 0.040304\n },\n \"downstream\": {\n  \"fold\": \"fold1\",\n  \"prediction\": {\n   \"method\": \"hard_infonce:head\",\n   \"best_features\": [\n    {\n     \"gene\": \"PTMS\",\n     \"r\": 0.726\n    },\n    {\n     \"gene\": \"PCSK7\",\n     \"r\": 0.6605\n    },\n    {\n     \"gene\": \"AP000769.1\",\n     \"r\": 0.6596\n    },\n    {\n     \"gene\": \"KRT19\",\n     \"r\": 0.6335\n    },\n    {\n     \"gene\": \"COL3A1\",\n     \"r\": 0.6261\n    },\n    {\n     \"gene\": \"MMP14\",\n     \"r\": 0.6158\n    }\n   ]\n  },\n  \"clustering\": {\n   \"k\": 3,\n   \"ari\": 0.182848,\n   \"group_column\": \"slide\",\n   \"group\": \"F1\"\n  },\n  \"retrieval_examples\": {\n   \"a_to_b\": [\n    {\n     \"query_label\": \"connective tissue\",\n     \"partner_rank\": 603,\n     \"top5_same_label\": 0\n    },\n    {\n     \"query_label\": \"immune infiltrate\",\n     \"partner_rank\": 172,\n     \"top5_same_label\": 0\n    },\n    {\n     \"query_label\": \"adipose tissue\",\n     \"partner_rank\": 16,\n     \"top5_same_label\": 0\n    },\n    {\n     \"query_label\": \"invasive cancer\",\n     \"partner_rank\": 1331,\n     \"top5_same_label\": 0\n    }\n   ],\n   \"b_to_a\": [\n    {\n     \"query_label\": \"immune infiltrate\",\n     \"partner_rank\": 159,\n     \"top5_same_label\": 0\n    },\n    {\n     \"query_label\": \"adipose tissue\",\n     \"partner_rank\": 17,\n     \"top5_same_label\": 0\n    },\n    {\n     \"query_label\": \"connective tissue\",\n     \"partner_rank\": 16,\n     \"top5_same_label\": 0\n    },\n    {\n     \"query_label\": \"invasive cancer\",\n     \"partner_rank\": 1107,\n     \"top5_same_label\": 2\n    }\n   ]\n  }\n },\n \"llm\": {\n  \"model_requested\": \"claude-opus-5-5\",\n  \"models_used\": [\n   \"claude-opus-5-5\"\n  ],\n  \"n_calls\": 2,\n  \"total_cost_usd\": 0.2359\n }\n}",
+   "schema": {
+    "properties": {
+     "executive_summary": {
+      "title": "Executive Summary",
+      "type": "string"
+     },
+     "data_and_objective": {
+      "title": "Data And Objective",
+      "type": "string"
+     },
+     "decisions_explained": {
+      "title": "Decisions Explained",
+      "type": "string"
+     },
+     "results_interpretation": {
+      "title": "Results Interpretation",
+      "type": "string"
+     },
+     "integration_benefit": {
+      "title": "Integration Benefit",
+      "type": "string"
+     },
+     "critic_and_revision": {
+      "title": "Critic And Revision",
+      "type": "string"
+     },
+     "limitations": {
+      "title": "Limitations",
+      "type": "string"
+     }
+    },
+    "required": [
+     "executive_summary",
+     "data_and_objective",
+     "decisions_explained",
+     "results_interpretation",
+     "integration_benefit",
+     "critic_and_revision",
+     "limitations"
+    ],
+    "title": "WriterReply",
+    "type": "object"
+   },
+   "text": "{\"executive_summary\": \"The goal was to learn a joint embedding of histology spot patches and spot-level gene expression, to support image\\u2194expression retrieval and prediction of expression from histology. The agent used grouped 4-fold cross-validation by patient and CLIP-style contrastive alignment, pairing a frozen **phikon** image encoder with an MLP trained from scratch on 100 expression PCs. After the critic's review, the hard-InfoNCE configuration replaced the soft-InfoNCE one as primary.\\n\\n- **Retrieval works, at a low absolute level.** On held-out patients, the primary's mean recall@10 is **0.025 \\u00b1 0.002** (\\u00b11 SD over 4 folds). Chance is 0.003 and linear CCA reaches 0.012. The gain over CCA is +0.013 (SD 0.002) and holds in 4/4 folds.\\n- **Prediction ties ridge regression.** Mean Pearson r on the top-50 genes is 0.171 against 0.180 for ridge (difference \\u22120.009, SD 0.037; better in 2/4 folds).\\n- **Label probes and clustering show no clear gain** over unimodal features or fusion baselines.\\n- **Patient effects dominate the embedding.** Held-out embeddings cluster more by patient (silhouette 0.40) than by tissue label (0.09).\\n\\nBottom line: contrastive integration clearly beats linear alignment for cross-modal retrieval. It does not beat a ridge model on frozen image features for expression prediction.\", \"data_and_objective\": \"**Data.** The record describes a spatial AnnData object with 13,620 spots. All spots have image patches and spatial coordinates; 13,619 have expression (11,871 genes). One spot lacks expression and was left out of alignment.\\n\\n**What shaped the decisions:**\\n- **Strong patient structure.** Patient explains 77% of the variance of the top expression components, with a group silhouette of 0.634. There are 36 slides nested within 8 patients. Spots are not independent within a patient, so whole patients had to be held out.\\n- **Spatial autocorrelation.** Median Moran's I is 0.14. Spot spacing is 1.88\\u00d7 the spot diameter (145 px), which is why a larger-patch comparison was worth testing.\\n- **Near-duplicate expression profiles.** 23.2% of expression spots have a near-twin. Treating every other spot in a batch as a negative would therefore often create false negatives, which motivated soft InfoNCE.\\n- **Sparse counts.** The counts are integers, 83% zeros, with a median library size of 3,231. This motivated normalisation, log1p, selection of variable genes and PCA.\\n- **Stain and scanner differences.** 28% of the variance in mean patch colour lies between patients, which motivated Reinhard colour normalisation.\\n- **Sparse, imbalanced labels.** The tissue `label` has 6 classes on 3,157 spots (23%), with an imbalance ratio of 18.124: 1,758 invasive cancer versus 97 breast glands. The objective does not name the label, so it was used only for evaluation. Label variance share in expression is 0.158, far below the patient share.\", \"decisions_explained\": \"- **Split:** grouped 4-fold CV by patient. Each fold tests 2 patients and holds out 1 patient for validation, leaving about 8.5k training pairs per fit; test sets have 3,184\\u20133,561 spots. This was chosen because of the 77% patient variance share and the spatial autocorrelation. Note that patient D was the validation group in both fold 3 and fold 4.\\n- **Strategy:** contrastive alignment (CLIP-style), because the objective needs a shared space and about 8,511 training pairs are available.\\n- **Image encoder:** frozen phikon. Four candidates were screened on 2,000 training and 500 validation spots from separate patients. Phikon was best on every metric:\\n  - recall@10: 0.087 (next best 0.063);\\n  - ridge R\\u00b2: 0.215 (next best 0.184);\\n  - probe F1: 0.432 (next best 0.39).\\n  \\n  PLIP, BiomedCLIP and DINOv2 were rejected. Fine-tuning was not tried, because none of the encoders is a pre-aligned dual encoder and a frozen backbone keeps variance low.\\n- **Expression encoder and preprocessing:**\\n  - an MLP trained from scratch;\\n  - library-size normalisation to the median, then log1p;\\n  - the 2,000 most variable genes, then PCA to 100 components, all fitted on training folds only.\\n- **Image preprocessing:** patches of 1.0\\u00d7 the spot diameter, so each patch covers the tissue the RNA came from, plus Reinhard colour normalisation.\\n- **Losses:** soft InfoNCE (because of the 23% near-twins) plus a cross-modal regression head (because the objective asks for prediction). No supervised cross-entropy, because the labels are evaluation-only.\\n- **Hyperparameters:**\\n  - 256-d embedding, 512 hidden units, dropout 0.1;\\n  - learning rate 0.001, batch size 512 (511 negatives per positive);\\n  - temperature learned, starting from 0.07;\\n  - early stopping with patience 15 and a 180 s cap per fit.\\n- **Comparisons:** two configurations tested the least certain choices. `hard_infonce` tested the soft-target choice; `patch_context_2x` tested the patch size.\\n- **Evaluation:** the primary metric is mean recall@10. Secondary metrics are top-50-gene Pearson against ridge and CCA, label probes and ARI against unimodal and fusion baselines, and patient silhouette.\\n- **Planner:** the LLM planner adopted the rule-based proposal unchanged.\", \"results_interpretation\": \"All figures are on held-out patients: mean \\u00b1 1 SD over 4 folds.\\n\\n**Retrieval (primary metric)**\\n- **Recall@10** across the full test fold:\\n\\n| Method | Recall@10 | SD | Folds |\\n|---|---|---|---|\\n| hard_infonce (primary) | 0.025 | 0.002 | 0.0221\\u20130.0278 |\\n| patch_context_2x | 0.021 | 0.002 | \\u2014 |\\n| soft InfoNCE (original primary) | 0.020 | 0.004 | \\u2014 |\\n| CCA | 0.012 | \\u2014 | \\u2014 |\\n| Chance | 0.003 | \\u2014 | \\u2014 |\\n\\n- **Other ranks:** R@1 is 0.003 and R@5 is 0.014. The median partner rank is 577.5, against 1047.125 for CCA.\\n- **Smaller gallery:** with a gallery of 1,000 spots, recall@10 is 0.067 (CCA 0.034).\\n- **Both directions are similar:** image\\u2192expression 0.026 and expression\\u2192image 0.024.\\n- **Semantic retrieval is better than exact retrieval.** 60.4% of the top-10 neighbours share the query's tissue label (label_match 0.604), against 0.448 by chance and 0.531 for CCA. The embedding retrieves the right kind of tissue far more often than the exact partner spot.\\n- **Per-query examples (fold 1)** vary widely: partner ranks run from 16 to 1331.\\n\\n**Cross-modal prediction (image \\u2192 expression, top-50 genes)**\\n- The primary's regression head reaches mean r 0.171 (SD 0.013). Ridge reaches 0.180 (SD 0.045, folds 0.1309\\u20130.2388), a statistical tie.\\n- kNN in the joint space is worse (0.144\\u20130.164) than any regression head.\\n- The patch_context_2x head has the highest mean, 0.188 (SD 0.005), with 158.25 genes at r > 0.3 against 137.75 for ridge. This is a descriptive test-set observation, not a pre-specified comparison.\\n- Within-patient correlations are similar across methods: 0.143 for the primary and 0.146 for ridge. Mean r over all genes is 0.093 for both.\\n- The best-predicted genes in fold 1 include PTMS (r 0.726), COL3A1 (0.626) and MMP14 (0.616).\\n\\n**Label probe (macro-F1, chance 0.167)**\\n- The primary's fused embedding reaches 0.297 (SD 0.113), which is above chance.\\n- It is below the unimodal baseline (0.341), early fusion (0.357) and late fusion (0.319), and above CCA (fused) at 0.258.\\n- None of these differences is clear, because SDs are 0.076\\u20130.099 and wins range from 1/4 to 3/4 folds.\\n\\n**Clustering (ARI)**\\n- The primary's fused embedding reaches 0.232 (SD 0.075), against 0.243 for unimodal (difference \\u22120.011, SD 0.094) and 0.231 for CCA (difference +0.001, SD 0.112).\\n- patch_context_2x (fused) has the highest mean, 0.288 (SD 0.100).\", \"integration_benefit\": \"- **Against linear alignment (CCA): yes, for retrieval.** Recall@10 is 0.025 against 0.012, a difference of +0.013 (SD 0.002) that holds in 4/4 folds. This is the clearest effect in the run and the gap is large relative to its spread. The validation data agree: the soft-InfoNCE primary beat CCA by +0.016 \\u00b1 0.008, also in 4/4 folds.\\n- **Against ridge regression for prediction: no.** The difference is \\u22120.009 (SD 0.037), with the primary better in 2/4 folds. The range of the difference comfortably includes zero, so joint training adds nothing measurable over a linear map from frozen phikon features. The same tie appeared on validation (0.150 vs 0.152).\\n- **Against each modality alone and against fusion, for label probes: no clear gain.** The fused embedding's macro-F1 falls below the unimodal baseline (\\u22120.044, SD 0.090, better in 1/4 folds), early fusion (\\u22120.060, SD 0.088, 1/4) and late fusion (\\u22120.022, SD 0.099, 2/4). The only positive difference is against CCA (+0.038, SD 0.076, 3/4), and it is not clear either. The image side carries most of the label signal: unimodal image features reach 0.324 and unimodal expression features 0.245.\\n- **Clustering: a tie** with unimodal features (\\u22120.011) and with CCA (+0.001), with SDs of about 0.1.\\n\\nSummary: the joint space is useful for cross-modal *retrieval*, where it clearly beats linear alignment. For predicting expression and for representing tissue type, it ties simpler methods; these ties are findings, not failures. Integration did not reduce patient effects: patient silhouette is 0.40, against 0.09 for label.\", \"critic_and_revision\": \"**Triggers.** The critic reviewed validation results only and raised five informational triggers:\\n- no clear gain over ridge for prediction (\\u22120.002, better in 2/4 folds);\\n- no clear gain over unimodal clustering (+0.039, 2/4);\\n- no clear gain over CCA clustering (+0.032, 3/4);\\n- two comparisons scoring higher on recall@10: hard_infonce (0.040 vs 0.034) and patch_context_2x (0.036 vs 0.034), both flagged automatically as \\\"within noise\\\".\\n\\n**Assessment.** The critic judged that the primary works but scores low: validation recall@10 was 0.0335, about 6\\u00d7 its validation chance of about 0.0054. It argued against the \\\"within noise\\\" flag for hard InfoNCE. Hard InfoNCE beat the soft-target primary in every fold (+0.0043, +0.0041, +0.0084, +0.0101; mean +0.0067), and a paired t over the four folds was about 4.5. The critic called this small but consistent evidence against the soft-target choice. It also noted two things:\\n- best-epoch selection on validation makes all scores slightly optimistic, equally for both configurations;\\n- hard InfoNCE overfits faster, with best epochs between 3 and 10 overall.\\n\\n**Revision.** The critic promoted `hard_infonce` to primary at no extra compute cost. The switch was **kept**: validation recall@10 rose from 0.0335 to 0.0403 (+0.0068, better in 4/4 folds).\\n\\n**Test outcome.** On the test data, scored once after the critic, the ranking held: hard_infonce 0.025, patch_context_2x 0.021, soft InfoNCE 0.020. The soft-target rationale (23.2% near-twins) did not pay off here.\", \"limitations\": \"- **Low absolute retrieval.** Recall@10 is 0.025 and the median rank is 577.5. Exact spot-level matching across patients is weak, even though it is well above chance (0.003) and CCA.\\n- **Batch confounding (warning flag).** Held-out embeddings group by patient (silhouette 0.40) far more than by tissue label (0.09). Colour normalisation was applied but no explicit batch correction, and patient explains 77% of the variance in expression.\\n- **Only 4 folds and 8 patients.** Each estimate rests on 4 held-out patient pairs. SDs over 4 folds are crude uncertainty measures, and no bootstrap intervals were computed. Probe and ARI SDs of about 0.1 make most of those comparisons uninformative.\\n- **Validation patient reused.** Patient D was the validation group in two folds. In 3 of 4 folds the validation patient is also tested in another fold, so model selection is not fully independent across folds.\\n- **Possible pretraining overlap.** Phikon was pretrained on TCGA tiles, not on these spot patches, but corpus overlap cannot be excluded. There was no zero-shot baseline, so overlap would make all phikon-based results, including ridge, slightly optimistic.\\n- **Optimistic validation scores.** Best-epoch selection made validation scores optimistic; test recall (0.025) is below validation (0.040). Training peaked early (epochs 3\\u201310), which suggests limited signal for the trainable heads.\\n- **Post-hoc primary.** The primary was switched after looking at validation results. Comparisons were not re-pre-registered, though the test data were scored only once.\\n- **Promising variant not selected.** patch_context_2x had the best prediction (r 0.188) and the best probe and ARI means, but it was not the selected primary. Its advantage is not formally tested and should not be claimed from these test results.\\n- **Fixed hyperparameters.** Only one embedding size, learning rate and set of loss weights was tried, there was no fine-tuning, and each fit was capped at 180 s.\\n- **Small, imbalanced labelled set.** Labels cover only 23% of spots with an imbalance ratio of 18.124, which limits probe and clustering evaluation. Retrieval examples in fold 1 show 0 same-label hits in the top 5 for most queries.\"}",
+   "data": {
+    "executive_summary": "The goal was to learn a joint embedding of histology spot patches and spot-level gene expression, to support image\u2194expression retrieval and prediction of expression from histology. The agent used grouped 4-fold cross-validation by patient and CLIP-style contrastive alignment, pairing a frozen **phikon** image encoder with an MLP trained from scratch on 100 expression PCs. After the critic's review, the hard-InfoNCE configuration replaced the soft-InfoNCE one as primary.\n\n- **Retrieval works, at a low absolute level.** On held-out patients, the primary's mean recall@10 is **0.025 \u00b1 0.002** (\u00b11 SD over 4 folds). Chance is 0.003 and linear CCA reaches 0.012. The gain over CCA is +0.013 (SD 0.002) and holds in 4/4 folds.\n- **Prediction ties ridge regression.** Mean Pearson r on the top-50 genes is 0.171 against 0.180 for ridge (difference \u22120.009, SD 0.037; better in 2/4 folds).\n- **Label probes and clustering show no clear gain** over unimodal features or fusion baselines.\n- **Patient effects dominate the embedding.** Held-out embeddings cluster more by patient (silhouette 0.40) than by tissue label (0.09).\n\nBottom line: contrastive integration clearly beats linear alignment for cross-modal retrieval. It does not beat a ridge model on frozen image features for expression prediction.",
+    "data_and_objective": "**Data.** The record describes a spatial AnnData object with 13,620 spots. All spots have image patches and spatial coordinates; 13,619 have expression (11,871 genes). One spot lacks expression and was left out of alignment.\n\n**What shaped the decisions:**\n- **Strong patient structure.** Patient explains 77% of the variance of the top expression components, with a group silhouette of 0.634. There are 36 slides nested within 8 patients. Spots are not independent within a patient, so whole patients had to be held out.\n- **Spatial autocorrelation.** Median Moran's I is 0.14. Spot spacing is 1.88\u00d7 the spot diameter (145 px), which is why a larger-patch comparison was worth testing.\n- **Near-duplicate expression profiles.** 23.2% of expression spots have a near-twin. Treating every other spot in a batch as a negative would therefore often create false negatives, which motivated soft InfoNCE.\n- **Sparse counts.** The counts are integers, 83% zeros, with a median library size of 3,231. This motivated normalisation, log1p, selection of variable genes and PCA.\n- **Stain and scanner differences.** 28% of the variance in mean patch colour lies between patients, which motivated Reinhard colour normalisation.\n- **Sparse, imbalanced labels.** The tissue `label` has 6 classes on 3,157 spots (23%), with an imbalance ratio of 18.124: 1,758 invasive cancer versus 97 breast glands. The objective does not name the label, so it was used only for evaluation. Label variance share in expression is 0.158, far below the patient share.",
+    "decisions_explained": "- **Split:** grouped 4-fold CV by patient. Each fold tests 2 patients and holds out 1 patient for validation, leaving about 8.5k training pairs per fit; test sets have 3,184\u20133,561 spots. This was chosen because of the 77% patient variance share and the spatial autocorrelation. Note that patient D was the validation group in both fold 3 and fold 4.\n- **Strategy:** contrastive alignment (CLIP-style), because the objective needs a shared space and about 8,511 training pairs are available.\n- **Image encoder:** frozen phikon. Four candidates were screened on 2,000 training and 500 validation spots from separate patients. Phikon was best on every metric:\n  - recall@10: 0.087 (next best 0.063);\n  - ridge R\u00b2: 0.215 (next best 0.184);\n  - probe F1: 0.432 (next best 0.39).\n  \n  PLIP, BiomedCLIP and DINOv2 were rejected. Fine-tuning was not tried, because none of the encoders is a pre-aligned dual encoder and a frozen backbone keeps variance low.\n- **Expression encoder and preprocessing:**\n  - an MLP trained from scratch;\n  - library-size normalisation to the median, then log1p;\n  - the 2,000 most variable genes, then PCA to 100 components, all fitted on training folds only.\n- **Image preprocessing:** patches of 1.0\u00d7 the spot diameter, so each patch covers the tissue the RNA came from, plus Reinhard colour normalisation.\n- **Losses:** soft InfoNCE (because of the 23% near-twins) plus a cross-modal regression head (because the objective asks for prediction). No supervised cross-entropy, because the labels are evaluation-only.\n- **Hyperparameters:**\n  - 256-d embedding, 512 hidden units, dropout 0.1;\n  - learning rate 0.001, batch size 512 (511 negatives per positive);\n  - temperature learned, starting from 0.07;\n  - early stopping with patience 15 and a 180 s cap per fit.\n- **Comparisons:** two configurations tested the least certain choices. `hard_infonce` tested the soft-target choice; `patch_context_2x` tested the patch size.\n- **Evaluation:** the primary metric is mean recall@10. Secondary metrics are top-50-gene Pearson against ridge and CCA, label probes and ARI against unimodal and fusion baselines, and patient silhouette.\n- **Planner:** the LLM planner adopted the rule-based proposal unchanged.",
+    "results_interpretation": "All figures are on held-out patients: mean \u00b1 1 SD over 4 folds.\n\n**Retrieval (primary metric)**\n- **Recall@10** across the full test fold:\n\n| Method | Recall@10 | SD | Folds |\n|---|---|---|---|\n| hard_infonce (primary) | 0.025 | 0.002 | 0.0221\u20130.0278 |\n| patch_context_2x | 0.021 | 0.002 | \u2014 |\n| soft InfoNCE (original primary) | 0.020 | 0.004 | \u2014 |\n| CCA | 0.012 | \u2014 | \u2014 |\n| Chance | 0.003 | \u2014 | \u2014 |\n\n- **Other ranks:** R@1 is 0.003 and R@5 is 0.014. The median partner rank is 577.5, against 1047.125 for CCA.\n- **Smaller gallery:** with a gallery of 1,000 spots, recall@10 is 0.067 (CCA 0.034).\n- **Both directions are similar:** image\u2192expression 0.026 and expression\u2192image 0.024.\n- **Semantic retrieval is better than exact retrieval.** 60.4% of the top-10 neighbours share the query's tissue label (label_match 0.604), against 0.448 by chance and 0.531 for CCA. The embedding retrieves the right kind of tissue far more often than the exact partner spot.\n- **Per-query examples (fold 1)** vary widely: partner ranks run from 16 to 1331.\n\n**Cross-modal prediction (image \u2192 expression, top-50 genes)**\n- The primary's regression head reaches mean r 0.171 (SD 0.013). Ridge reaches 0.180 (SD 0.045, folds 0.1309\u20130.2388), a statistical tie.\n- kNN in the joint space is worse (0.144\u20130.164) than any regression head.\n- The patch_context_2x head has the highest mean, 0.188 (SD 0.005), with 158.25 genes at r > 0.3 against 137.75 for ridge. This is a descriptive test-set observation, not a pre-specified comparison.\n- Within-patient correlations are similar across methods: 0.143 for the primary and 0.146 for ridge. Mean r over all genes is 0.093 for both.\n- The best-predicted genes in fold 1 include PTMS (r 0.726), COL3A1 (0.626) and MMP14 (0.616).\n\n**Label probe (macro-F1, chance 0.167)**\n- The primary's fused embedding reaches 0.297 (SD 0.113), which is above chance.\n- It is below the unimodal baseline (0.341), early fusion (0.357) and late fusion (0.319), and above CCA (fused) at 0.258.\n- None of these differences is clear, because SDs are 0.076\u20130.099 and wins range from 1/4 to 3/4 folds.\n\n**Clustering (ARI)**\n- The primary's fused embedding reaches 0.232 (SD 0.075), against 0.243 for unimodal (difference \u22120.011, SD 0.094) and 0.231 for CCA (difference +0.001, SD 0.112).\n- patch_context_2x (fused) has the highest mean, 0.288 (SD 0.100).",
+    "integration_benefit": "- **Against linear alignment (CCA): yes, for retrieval.** Recall@10 is 0.025 against 0.012, a difference of +0.013 (SD 0.002) that holds in 4/4 folds. This is the clearest effect in the run and the gap is large relative to its spread. The validation data agree: the soft-InfoNCE primary beat CCA by +0.016 \u00b1 0.008, also in 4/4 folds.\n- **Against ridge regression for prediction: no.** The difference is \u22120.009 (SD 0.037), with the primary better in 2/4 folds. The range of the difference comfortably includes zero, so joint training adds nothing measurable over a linear map from frozen phikon features. The same tie appeared on validation (0.150 vs 0.152).\n- **Against each modality alone and against fusion, for label probes: no clear gain.** The fused embedding's macro-F1 falls below the unimodal baseline (\u22120.044, SD 0.090, better in 1/4 folds), early fusion (\u22120.060, SD 0.088, 1/4) and late fusion (\u22120.022, SD 0.099, 2/4). The only positive difference is against CCA (+0.038, SD 0.076, 3/4), and it is not clear either. The image side carries most of the label signal: unimodal image features reach 0.324 and unimodal expression features 0.245.\n- **Clustering: a tie** with unimodal features (\u22120.011) and with CCA (+0.001), with SDs of about 0.1.\n\nSummary: the joint space is useful for cross-modal *retrieval*, where it clearly beats linear alignment. For predicting expression and for representing tissue type, it ties simpler methods; these ties are findings, not failures. Integration did not reduce patient effects: patient silhouette is 0.40, against 0.09 for label.",
+    "critic_and_revision": "**Triggers.** The critic reviewed validation results only and raised five informational triggers:\n- no clear gain over ridge for prediction (\u22120.002, better in 2/4 folds);\n- no clear gain over unimodal clustering (+0.039, 2/4);\n- no clear gain over CCA clustering (+0.032, 3/4);\n- two comparisons scoring higher on recall@10: hard_infonce (0.040 vs 0.034) and patch_context_2x (0.036 vs 0.034), both flagged automatically as \"within noise\".\n\n**Assessment.** The critic judged that the primary works but scores low: validation recall@10 was 0.0335, about 6\u00d7 its validation chance of about 0.0054. It argued against the \"within noise\" flag for hard InfoNCE. Hard InfoNCE beat the soft-target primary in every fold (+0.0043, +0.0041, +0.0084, +0.0101; mean +0.0067), and a paired t over the four folds was about 4.5. The critic called this small but consistent evidence against the soft-target choice. It also noted two things:\n- best-epoch selection on validation makes all scores slightly optimistic, equally for both configurations;\n- hard InfoNCE overfits faster, with best epochs between 3 and 10 overall.\n\n**Revision.** The critic promoted `hard_infonce` to primary at no extra compute cost. The switch was **kept**: validation recall@10 rose from 0.0335 to 0.0403 (+0.0068, better in 4/4 folds).\n\n**Test outcome.** On the test data, scored once after the critic, the ranking held: hard_infonce 0.025, patch_context_2x 0.021, soft InfoNCE 0.020. The soft-target rationale (23.2% near-twins) did not pay off here.",
+    "limitations": "- **Low absolute retrieval.** Recall@10 is 0.025 and the median rank is 577.5. Exact spot-level matching across patients is weak, even though it is well above chance (0.003) and CCA.\n- **Batch confounding (warning flag).** Held-out embeddings group by patient (silhouette 0.40) far more than by tissue label (0.09). Colour normalisation was applied but no explicit batch correction, and patient explains 77% of the variance in expression.\n- **Only 4 folds and 8 patients.** Each estimate rests on 4 held-out patient pairs. SDs over 4 folds are crude uncertainty measures, and no bootstrap intervals were computed. Probe and ARI SDs of about 0.1 make most of those comparisons uninformative.\n- **Validation patient reused.** Patient D was the validation group in two folds. In 3 of 4 folds the validation patient is also tested in another fold, so model selection is not fully independent across folds.\n- **Possible pretraining overlap.** Phikon was pretrained on TCGA tiles, not on these spot patches, but corpus overlap cannot be excluded. There was no zero-shot baseline, so overlap would make all phikon-based results, including ridge, slightly optimistic.\n- **Optimistic validation scores.** Best-epoch selection made validation scores optimistic; test recall (0.025) is below validation (0.040). Training peaked early (epochs 3\u201310), which suggests limited signal for the trainable heads.\n- **Post-hoc primary.** The primary was switched after looking at validation results. Comparisons were not re-pre-registered, though the test data were scored only once.\n- **Promising variant not selected.** patch_context_2x had the best prediction (r 0.188) and the best probe and ARI means, but it was not the selected primary. Its advantage is not formally tested and should not be claimed from these test results.\n- **Fixed hyperparameters.** Only one embedding size, learning rate and set of loss weights was tried, there was no fine-tuning, and each fit was capped at 180 s.\n- **Small, imbalanced labelled set.** Labels cover only 23% of spots with an imbalance ratio of 18.124, which limits probe and clustering evaluation. Retrieval examples in fold 1 show 0 same-label hits in the top 5 for most queries."
+   }
+  }
+ ]
+}

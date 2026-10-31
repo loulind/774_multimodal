@@ -1,0 +1,25 @@
+{
+ "file": "held_out_embeddings.npz",
+ "configuration": "hard_infonce",
+ "modalities": [
+  "image",
+  "expression"
+ ],
+ "dim": {
+  "image": 256,
+  "expression": 256
+ },
+ "n_rows": 4882,
+ "n_held_out": 13619,
+ "subsampled": true,
+ "dtype": "float16",
+ "l2_normalised": true,
+ "arrays": [
+  "ids",
+  "fold",
+  "label",
+  "image",
+  "expression"
+ ],
+ "note": "Each row is a test sample embedded by its fold's model (never trained on it). Rows from different folds come from different models, so compare rows within one fold."
+}

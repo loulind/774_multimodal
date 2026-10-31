@@ -1,0 +1,390 @@
+{
+ "a_to_b": [
+  {
+   "query": "F1_13x28",
+   "query_position": 1195,
+   "query_label": "connective tissue",
+   "partner_rank": 603,
+   "retrieved": [
+    {
+     "id": "C1_10x21",
+     "position": 5,
+     "similarity": 0.6337,
+     "is_partner": false,
+     "label": "invasive cancer",
+     "same_label": false
+    },
+    {
+     "id": "C5_13x19",
+     "position": 763,
+     "similarity": 0.6004,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "C1_15x23",
+     "position": 59,
+     "similarity": 0.5632,
+     "is_partner": false,
+     "label": "invasive cancer",
+     "same_label": false
+    },
+    {
+     "id": "C2_17x26",
+     "position": 229,
+     "similarity": 0.5568,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "C2_19x25",
+     "position": 251,
+     "similarity": 0.5434,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    }
+   ]
+  },
+  {
+   "query": "F1_8x24",
+   "query_position": 1728,
+   "query_label": "immune infiltrate",
+   "partner_rank": 172,
+   "retrieved": [
+    {
+     "id": "C6_22x19",
+     "position": 1046,
+     "similarity": 0.5357,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F2_9x22",
+     "position": 2454,
+     "similarity": 0.5255,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "C1_21x13",
+     "position": 136,
+     "similarity": 0.5232,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F3_6x25",
+     "position": 3070,
+     "similarity": 0.516,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "C1_14x23",
+     "position": 47,
+     "similarity": 0.5118,
+     "is_partner": false,
+     "label": "invasive cancer",
+     "same_label": false
+    }
+   ]
+  },
+  {
+   "query": "C1_22x16",
+   "query_position": 148,
+   "query_label": "adipose tissue",
+   "partner_rank": 16,
+   "retrieved": [
+    {
+     "id": "C3_9x14",
+     "position": 540,
+     "similarity": 0.5436,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "C5_23x16",
+     "position": 879,
+     "similarity": 0.5335,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "C1_14x22",
+     "position": 46,
+     "similarity": 0.5151,
+     "is_partner": false,
+     "label": "invasive cancer",
+     "same_label": false
+    },
+    {
+     "id": "C5_13x19",
+     "position": 763,
+     "similarity": 0.5006,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "C1_15x22",
+     "position": 58,
+     "similarity": 0.4921,
+     "is_partner": false,
+     "label": "invasive cancer",
+     "same_label": false
+    }
+   ]
+  },
+  {
+   "query": "F1_25x11",
+   "query_position": 1487,
+   "query_label": "invasive cancer",
+   "partner_rank": 1331,
+   "retrieved": [
+    {
+     "id": "F2_24x8",
+     "position": 2183,
+     "similarity": 0.6282,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F2_9x5",
+     "position": 2467,
+     "similarity": 0.6219,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F2_25x14",
+     "position": 2189,
+     "similarity": 0.598,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F2_12x30",
+     "position": 1860,
+     "similarity": 0.5953,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F2_16x23",
+     "position": 1971,
+     "similarity": 0.5918,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    }
+   ]
+  }
+ ],
+ "b_to_a": [
+  {
+   "query": "F1_7x23",
+   "query_position": 1696,
+   "query_label": "immune infiltrate",
+   "partner_rank": 159,
+   "retrieved": [
+    {
+     "id": "F3_13x34",
+     "position": 2584,
+     "similarity": 0.6161,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "C6_10x20",
+     "position": 913,
+     "similarity": 0.5919,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "C5_11x16",
+     "position": 740,
+     "similarity": 0.5908,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "C3_12x14",
+     "position": 383,
+     "similarity": 0.5824,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F2_18x8",
+     "position": 2039,
+     "similarity": 0.5657,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    }
+   ]
+  },
+  {
+   "query": "C1_22x16",
+   "query_position": 148,
+   "query_label": "adipose tissue",
+   "partner_rank": 17,
+   "retrieved": [
+    {
+     "id": "F2_13x29",
+     "position": 1889,
+     "similarity": 0.5257,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "C6_21x19",
+     "position": 1044,
+     "similarity": 0.5008,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F1_13x28",
+     "position": 1195,
+     "similarity": 0.4855,
+     "is_partner": false,
+     "label": "connective tissue",
+     "same_label": false
+    },
+    {
+     "id": "C1_16x24",
+     "position": 74,
+     "similarity": 0.4824,
+     "is_partner": false,
+     "label": "invasive cancer",
+     "same_label": false
+    },
+    {
+     "id": "F2_14x29",
+     "position": 1920,
+     "similarity": 0.4794,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    }
+   ]
+  },
+  {
+   "query": "F1_22x15",
+   "query_position": 1422,
+   "query_label": "connective tissue",
+   "partner_rank": 16,
+   "retrieved": [
+    {
+     "id": "F3_12x34",
+     "position": 2555,
+     "similarity": 0.4809,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F3_5x25",
+     "position": 3040,
+     "similarity": 0.4533,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F1_17x5",
+     "position": 1312,
+     "similarity": 0.4328,
+     "is_partner": false,
+     "label": "invasive cancer",
+     "same_label": false
+    },
+    {
+     "id": "F3_13x34",
+     "position": 2584,
+     "similarity": 0.4179,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F2_11x9",
+     "position": 1837,
+     "similarity": 0.4171,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    }
+   ]
+  },
+  {
+   "query": "F1_16x21",
+   "query_position": 1274,
+   "query_label": "invasive cancer",
+   "partner_rank": 1107,
+   "retrieved": [
+    {
+     "id": "F3_12x34",
+     "position": 2555,
+     "similarity": 0.6169,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F1_17x5",
+     "position": 1312,
+     "similarity": 0.5708,
+     "is_partner": false,
+     "label": "invasive cancer",
+     "same_label": true
+    },
+    {
+     "id": "F3_19x7",
+     "position": 2744,
+     "similarity": 0.5553,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F2_21x5",
+     "position": 2111,
+     "similarity": 0.5414,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "F1_21x6",
+     "position": 1413,
+     "similarity": 0.5405,
+     "is_partner": false,
+     "label": "invasive cancer",
+     "same_label": true
+    }
+   ]
+  }
+ ]
+}

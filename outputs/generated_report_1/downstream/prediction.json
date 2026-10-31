@@ -1,0 +1,45 @@
+{
+ "method": "hard_infonce:head",
+ "best_features": [
+  {
+   "gene": "PTMS",
+   "r": 0.726
+  },
+  {
+   "gene": "PCSK7",
+   "r": 0.6605
+  },
+  {
+   "gene": "AP000769.1",
+   "r": 0.6596
+  },
+  {
+   "gene": "KRT19",
+   "r": 0.6335
+  },
+  {
+   "gene": "COL3A1",
+   "r": 0.6261
+  },
+  {
+   "gene": "MMP14",
+   "r": 0.6158
+  },
+  {
+   "gene": "COL1A2",
+   "r": 0.5934
+  },
+  {
+   "gene": "UBA52",
+   "r": 0.5924
+  },
+  {
+   "gene": "SPARC",
+   "r": 0.5881
+  },
+  {
+   "gene": "SNX22",
+   "r": 0.581
+  }
+ ]
+}

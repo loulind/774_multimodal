@@ -1,0 +1,8 @@
+metric,representation,view,name,kind,value,sd,lo,hi,interval,per_fold,is_primary
+prediction_mean_pearson_top50,patch_context_2x:head,,patch_context_2x:head,configuration,0.1884442923904862,0.0054292156585409096,0.1830150767319453,0.19387350804902712,±1 SD over 4 folds,"[0.1911, 0.1945, 0.186, 0.1822]",False
+prediction_mean_pearson_top50,ridge,,ridge,baseline,0.17986647387011204,0.044578492507491824,0.1352879813626202,0.22444496637760386,±1 SD over 4 folds,"[0.1796, 0.2388, 0.1701, 0.1309]",False
+prediction_mean_pearson_top50,hard_infonce:head,,hard_infonce:head,configuration,0.17121147256810218,0.013090109481306636,0.15812136308679553,0.18430158204940883,±1 SD over 4 folds,"[0.185, 0.1773, 0.1679, 0.1546]",True
+prediction_mean_pearson_top50,primary:head,,primary:head,configuration,0.1681300412619021,0.022540330184329518,0.14558971107757257,0.1906703714462316,±1 SD over 4 folds,"[0.1952, 0.1706, 0.1667, 0.1401]",False
+prediction_mean_pearson_top50,patch_context_2x:knn,,patch_context_2x:knn,configuration,0.16399557042634114,0.014449674767484249,0.1495458956588569,0.17844524519382537,±1 SD over 4 folds,"[0.1692, 0.1609, 0.1458, 0.1801]",False
+prediction_mean_pearson_top50,primary:knn,,primary:knn,configuration,0.1488070487882942,0.017481696695562775,0.13132535209273144,0.16628874548385697,±1 SD over 4 folds,"[0.1727, 0.1491, 0.1316, 0.1418]",False
+prediction_mean_pearson_top50,hard_infonce:knn,,hard_infonce:knn,configuration,0.14431071385915858,0.013854130208059296,0.1304565836510993,0.15816484406721787,±1 SD over 4 folds,"[0.1633, 0.1309, 0.1385, 0.1446]",True

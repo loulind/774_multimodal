@@ -31,6 +31,7 @@ from . import retrieval as R
 from .metrics import l2n
 
 B_FAST, B_SLOW = 1000, 200
+GALLERY_SIZE = 1000              # fixed gallery, so recall is comparable across test-set sizes
 ZERO_SHOT_CEILING = 0.9          # zero-shot recall@10 at or above this suggests pretraining overlap
 COLLAPSE_RANK_SHARE = 0.10
 
@@ -81,9 +82,9 @@ def evaluate_fold(reps: list[Representation], fd: FoldData, metrics: list[str], 
         if rep.aligned and b is not None and a in te and b in te:
             if "retrieval_recall_at_k" in metrics:
                 res = R.retrieval_metrics(te[a], te[b], ks, fd.y_test if labels else None)
-                g = R.gallery_subsample_recall(te[a], te[b], 1000)
+                g = R.gallery_subsample_recall(te[a], te[b], GALLERY_SIZE)
                 if g is not None:
-                    res["mean_R@10_gallery1000"] = g
+                    res[f"mean_R@10_gallery{GALLERY_SIZE}"] = g
                 out["retrieval"][rep.name] = res
             out["geometry"][rep.name] = G.geometry(te[a], te[b], seed)
         if labels:
@@ -135,14 +136,21 @@ def _std(ref: np.ndarray, X: np.ndarray) -> np.ndarray:
 # primary metric, comparisons, aggregation, bootstrap
 # ---------------------------------------------------------------------------
 
+def prediction_method(predictions: dict, rep: str) -> str | None:
+    """A representation's cross-modal prediction, fixed in advance: its trained regression head if it
+    has one, otherwise nearest neighbours in its joint space ("ridge" is its own method). Never the
+    better of the two on held-out data, which would select on test results."""
+    return next((m for m in (f"{rep}:head", f"{rep}:knn", rep) if m in predictions), None)
+
+
 def metric_value(fold: dict, rep: str, metric: str) -> float | None:
     """The primary metric for one representation on one fold (higher is better)."""
     try:
         if metric == "retrieval_mean_recall_at_10":
             return float(fold["retrieval"][rep]["mean"]["R@10"])
         if metric == "prediction_mean_pearson_top50":
-            vals = [v["mean_r_top50"] for m, v in fold["prediction"].items() if m.split(":")[0] == rep]
-            return float(max(vals)) if vals else None
+            m = prediction_method(fold["prediction"], rep)
+            return float(fold["prediction"][m]["mean_r_top50"]) if m else None
         if metric == "probe_macro_f1":
             p = fold["probe"][rep]
             return float(p.get("fused", next(iter(p.values())))["macro_f1"])
@@ -250,8 +258,7 @@ def _primary_key(f: dict, rep: str, metric: str) -> str | None:
         p = f["probe"].get(rep, {})
         return f"{rep}/fused" if "fused" in p else (f"{rep}/{next(iter(p))}" if p else None)
     if metric == "prediction_mean_pearson_top50":
-        cands = {m: v["mean_r_top50"] for m, v in f["prediction"].items() if m.split(":")[0] == rep}
-        return max(cands, key=cands.get) if cands else None
+        return prediction_method(f["prediction"], rep)
     return rep
 
 

@@ -1,0 +1,746 @@
+[
+  {
+    "step": "hardware",
+    "decision": "compute device",
+    "chosen": "mps (Apple GPU (MPS) on arm64)",
+    "rationale": "Detected 10 CPU cores and 17.2 GB memory. Feature extraction and fine-tuning run on mps; projection heads train on cpu so reruns are bit-for-bit reproducible.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "device": "mps",
+      "heads_device": "cpu",
+      "quick": false,
+      "budget": {
+        "train_seconds_per_fit": 180.0,
+        "finetune_seconds_per_fit": 1200.0,
+        "total_train_seconds": 2700.0,
+        "max_epochs": 300,
+        "max_folds": 4,
+        "max_samples": null,
+        "screening_train": 2000,
+        "screening_val": 500,
+        "max_candidates": 4,
+        "eval_max_samples": 5000,
+        "feature_batch_size": 64,
+        "device": "mps"
+      }
+    },
+    "source": "system"
+  },
+  {
+    "step": "profile",
+    "decision": "data profile",
+    "chosen": "spatial_anndata; n=13,620; expression (matrix, 13,619), spatial (spatial, 13,620), image (image, 13,620); label 'label' 6 classes on 23% of samples; 8 'patient' groups",
+    "rationale": "Measured from the data before any modeling decision (profile.json).",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_samples": 13620,
+      "modalities": {
+        "expression": "matrix",
+        "spatial": "spatial",
+        "image": "image"
+      }
+    },
+    "source": "system"
+  },
+  {
+    "step": "objective",
+    "decision": "parsed objective",
+    "chosen": "tasks ['joint_embedding', 'retrieval', 'cross_modal_prediction']; primary retrieval; modalities ['image', 'expression']; predict expression from image",
+    "rationale": "retrieval: retrieval; joint_embedding: joint embeddings; cross_modal_prediction: prediction of gene expression from histology",
+    "alternatives_rejected": [],
+    "evidence": {
+      "label_column": "label",
+      "label_evidence": "'label' is the only label column; used for evaluation only (not named in the objective)"
+    },
+    "source": "heuristic"
+  },
+  {
+    "step": "split",
+    "decision": "how to split the data",
+    "chosen": "grouped by 'patient', 4 fold(s)",
+    "rationale": "Samples come in 8 'patient' groups; 'patient' explains 77% of the variance of the top expression components; neighbouring samples are spatially correlated (median Moran's I 0.14). Samples within a group are not independent, so whole groups are held out: grouped 4-fold cross-validation, each group tested exactly once, with one further group per fold held out for validation (early stopping and model selection).",
+    "alternatives_rejected": [
+      {
+        "option": "random sample-level split",
+        "reason": "leaks group-level and spatial dependence into the test set and overstates performance"
+      },
+      {
+        "option": "leave-one-patient-out (8 folds)",
+        "reason": "8 fits per configuration; 4 folds still test every group once"
+      }
+    ],
+    "evidence": {
+      "n_groups": 8,
+      "group_variance_share": 0.7720775843832305,
+      "morans_i_median": 0.1445518628124538
+    },
+    "source": "heuristic"
+  },
+  {
+    "step": "strategy",
+    "decision": "integration strategy",
+    "chosen": "contrastive_alignment (CLIP-style)",
+    "rationale": "The objective needs a shared space (joint_embedding, retrieval, cross_modal_prediction) and there are about 8,511 training pairs. Contrastive alignment learns that space directly from the pairing: each sample's partner is its positive and the other samples in the batch its negatives (InfoNCE, a lower bound on the mutual information between modalities).",
+    "alternatives_rejected": [
+      {
+        "option": "early fusion (concatenate features)",
+        "reason": "gives no cross-modal space: cannot retrieve or predict one modality from the other"
+      },
+      {
+        "option": "late fusion (combine per-modality predictions)",
+        "reason": "same; used as a baseline only"
+      },
+      {
+        "option": "supervised representation learning only",
+        "reason": "labels are not the objective's target; they are kept for evaluation"
+      }
+    ],
+    "evidence": {
+      "n_paired": 13619,
+      "n_train_est": 8511,
+      "tasks": [
+        "joint_embedding",
+        "retrieval",
+        "cross_modal_prediction"
+      ]
+    },
+    "source": "heuristic"
+  },
+  {
+    "step": "encoder",
+    "decision": "encoder for 'image'",
+    "chosen": "phikon",
+    "rationale": "Highest screening score among 4 candidates (alignment_recall_at_10 0.087 on held-out screening samples). Screened on 2000 training and 500 validation samples from separate groups.",
+    "alternatives_rejected": [
+      {
+        "option": "biomedclip_image",
+        "reason": "alignment_recall_at_10 0.063 < 0.087"
+      },
+      {
+        "option": "dinov2_base",
+        "reason": "alignment_recall_at_10 0.063 < 0.087"
+      },
+      {
+        "option": "plip_image",
+        "reason": "alignment_recall_at_10 0.057 < 0.087"
+      }
+    ],
+    "evidence": {
+      "scores": {
+        "phikon": 0.087,
+        "biomedclip_image": 0.063,
+        "dinov2_base": 0.063,
+        "plip_image": 0.057
+      }
+    },
+    "source": "heuristic"
+  },
+  {
+    "step": "preprocessing",
+    "decision": "'image' patch size",
+    "chosen": "1.0 x spot diameter",
+    "rationale": "Each patch covers the spot's own footprint (145 px), the tissue its RNA was captured from; resized to the encoder's input size.",
+    "alternatives_rejected": [
+      {
+        "option": "2.0 x spot diameter",
+        "reason": "adds tissue context but also cells outside the spot; tested as a comparison when the budget allows"
+      }
+    ],
+    "evidence": {
+      "spot_diameter_px": 144.99999422314582
+    },
+    "source": "heuristic"
+  },
+  {
+    "step": "preprocessing",
+    "decision": "'image' colour normalisation",
+    "chosen": "Reinhard",
+    "rationale": "28% of the variance in mean image colour lies between groups (ICC >= 20%); a frozen encoder would encode stain/scanner differences as signal. Colour statistics are matched to the training data.",
+    "alternatives_rejected": [
+      {
+        "option": "none",
+        "reason": "group-level colour shifts would act as a batch effect"
+      }
+    ],
+    "evidence": {
+      "icc": 0.27760951594564415
+    },
+    "source": "heuristic"
+  },
+  {
+    "step": "encoder",
+    "decision": "encoder for 'expression'",
+    "chosen": "mlp (trained from scratch)",
+    "rationale": "'expression' is a matrix modality; no pretrained encoder applies, so a small MLP is trained on the preprocessed features.",
+    "alternatives_rejected": [
+      {
+        "option": "PCA projection only",
+        "reason": "linear; kept as the unimodal baseline"
+      }
+    ],
+    "evidence": {},
+    "source": "heuristic"
+  },
+  {
+    "step": "preprocessing",
+    "decision": "'expression' features",
+    "chosen": "library-size normalisation to the median library size, then log1p; top 2,000 variable; pca",
+    "rationale": "genes matrix, 83% zeros, median library 3,231 (integer counts): library-size normalisation to the median library size, then log1p; keep the 2,000 most variable features (fitted on training folds only); then PCA to 100 components (fitted on training data): about 8,511 training samples for 2,000 features is < 5 per feature, so compressing first reduces parameters and count noise.",
+    "alternatives_rejected": [
+      {
+        "option": "all variable features as MLP input",
+        "reason": "2,000 inputs x hidden units parameters for few samples per feature"
+      }
+    ],
+    "evidence": {
+      "sparsity": 0.827092668216269,
+      "n_detected_5pct": 9514
+    },
+    "source": "heuristic"
+  },
+  {
+    "step": "loss",
+    "decision": "contrastive loss",
+    "chosen": "soft-target InfoNCE",
+    "rationale": "23% of 'expression' samples have a near-identical twin (> 10%). Hard InfoNCE treats every other sample in the batch as a negative, so look-alike samples would be pushed apart (false negatives); soft targets weight each candidate by its within-modality similarity instead.",
+    "alternatives_rejected": [
+      {
+        "option": "hard InfoNCE (CLIP)",
+        "reason": "penalises near-identical negatives; tested as a comparison when the budget allows"
+      }
+    ],
+    "evidence": {
+      "near_twin_fraction": 0.232
+    },
+    "source": "heuristic"
+  },
+  {
+    "step": "loss",
+    "decision": "prediction head",
+    "chosen": "regress 'expression' from 'image'",
+    "rationale": "The objective asks to predict expression from image: a regression head on the image embedding is trained jointly (mean squared error on the preprocessed target features). Nearest-neighbour prediction through the joint space and ridge regression on frozen features are evaluated alongside it.",
+    "alternatives_rejected": [
+      {
+        "option": "retrieval-only prediction",
+        "reason": "kept as a comparison method at evaluation"
+      }
+    ],
+    "evidence": {},
+    "source": "heuristic"
+  },
+  {
+    "step": "hyperparameters",
+    "decision": "head and training",
+    "chosen": "embed 256, batch 512, lr 0.001, dropout 0.1",
+    "rationale": "About 8,511 training pairs: a 256-d joint space with 2-layer heads (512 hidden) is small relative to n; batch 512 gives 511 negatives per positive; early stopping on validation (patience 15) and a 180s cap per fit; temperature learned from 0.07.",
+    "alternatives_rejected": [
+      {
+        "option": "larger heads",
+        "reason": "more parameters than the data support"
+      }
+    ],
+    "evidence": {
+      "n_train_est": 8511
+    },
+    "source": "heuristic"
+  },
+  {
+    "step": "regime",
+    "decision": "frozen backbones or fine-tuning",
+    "chosen": "frozen",
+    "rationale": "Frozen pretrained backbones with small trainable projection heads: few trainable parameters for the number of pairs (low variance), features computed once. Fine-tuning not tried: no pre-aligned dual encoder among the chosen encoders.",
+    "alternatives_rejected": [
+      {
+        "option": "full fine-tuning",
+        "reason": "~86M parameters per tower for the available pairs; high variance and compute"
+      }
+    ],
+    "evidence": {
+      "n_train_est": 8511
+    },
+    "source": "heuristic"
+  },
+  {
+    "step": "comparison",
+    "decision": "comparison configuration 'hard_infonce'",
+    "chosen": "run",
+    "rationale": "Tests the soft-target decision.",
+    "alternatives_rejected": [],
+    "evidence": {},
+    "source": "heuristic"
+  },
+  {
+    "step": "comparison",
+    "decision": "comparison configuration 'patch_context_2x'",
+    "chosen": "run",
+    "rationale": "Tests the patch-size decision (2 x spot diameter: more tissue context).",
+    "alternatives_rejected": [],
+    "evidence": {},
+    "source": "heuristic"
+  },
+  {
+    "step": "evaluation",
+    "decision": "primary metric",
+    "chosen": "retrieval_mean_recall_at_10",
+    "rationale": "First measurable task in the objective is 'retrieval'. Every metric is computed on held-out data and compared with unimodal features, linear alignment (CCA), ridge regression and chance, to show whether integration helped.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "metrics": [
+        "retrieval_recall_at_k",
+        "prediction_pearson",
+        "linear_probe",
+        "knn_accuracy",
+        "clustering_ari_nmi",
+        "retrieval_label_match_at_k",
+        "alignment_uniformity",
+        "modality_gap",
+        "effective_rank",
+        "group_silhouette"
+      ],
+      "baselines": [
+        "unimodal",
+        "chance",
+        "cca",
+        "ridge",
+        "early_fusion",
+        "late_fusion"
+      ]
+    },
+    "source": "heuristic"
+  },
+  {
+    "step": "validator",
+    "decision": "plan repair",
+    "chosen": "scaled comparison time caps by 0.75 to fit the run budget",
+    "rationale": "guardrail",
+    "alternatives_rejected": [],
+    "evidence": {},
+    "source": "validator"
+  },
+  {
+    "step": "split",
+    "decision": "sample selection",
+    "chosen": "1 samples lack one of the paired modalities and are not used for alignment",
+    "rationale": "Recorded while drawing the folds.",
+    "alternatives_rejected": [],
+    "evidence": {},
+    "source": "system"
+  },
+  {
+    "step": "split",
+    "decision": "keep grouped 4-fold CV by patient",
+    "chosen": "grouped_kfold on 'patient', 4 folds",
+    "rationale": "Patient explains 77% of the variance in expression PCs (group silhouette 0.63), and 36 slides are nested in 8 patients. Holding out whole patients is the only way to keep held-out data independent. Four folds (2 test patients each, 1 validation patient) leave about 8.5k training pairs per fit and fit the max_folds=4 limit. Budget: 4x(180+135+135) + 180 refit + 4x180 critic = 2700 s, exactly the total.",
+    "alternatives_rejected": [
+      {
+        "option": "split by slide",
+        "reason": "slides are nested in patients, so patient effects would leak across splits"
+      },
+      {
+        "option": "leave-one-patient-out",
+        "reason": "8 folds exceed max_folds=4 and the time budget"
+      }
+    ],
+    "evidence": {},
+    "source": "llm"
+  },
+  {
+    "step": "encoder",
+    "decision": "adopt phikon, frozen",
+    "chosen": "phikon",
+    "rationale": "phikon is best on every screening metric: recall@10 0.087 (next best 0.063), ridge R2 0.215 (next best 0.184) and probe F1 0.43 (next best 0.39). Pretraining was on TCGA tiles, not on these spot patches. Because there is no zero-shot baseline, any corpus overlap could only make the frozen features slightly optimistic, not the reported baselines. With about 8.5k pairs from only 5 training patients per fold, frozen features with small heads are the low-variance choice.",
+    "alternatives_rejected": [
+      {
+        "option": "partial fine-tuning of phikon",
+        "reason": "too few independent groups (5 training patients) for 86M-parameter adaptation, and it would use the time needed for the comparisons"
+      },
+      {
+        "option": "biomedclip_image",
+        "reason": "ridge R2 0.026 is far below phikon's 0.215"
+      }
+    ],
+    "evidence": {},
+    "source": "llm"
+  },
+  {
+    "step": "losses",
+    "decision": "adopt soft InfoNCE + regression, with hard InfoNCE as a comparison",
+    "chosen": "soft_infonce (1.0) + cross_modal_regression (1.0)",
+    "rationale": "23.2% of expression spots have a near-twin, so hard negatives would often be false negatives. The objective explicitly asks for prediction of expression from histology, which justifies the regression term. The labels are not named in the objective, are only 23% present and stay evaluation-only (no supervised_ce).",
+    "alternatives_rejected": [
+      {
+        "option": "add supervised_ce on 'label'",
+        "reason": "labels are requested only for evaluation; training on them would inflate the probe and kNN metrics"
+      }
+    ],
+    "evidence": {},
+    "source": "llm"
+  },
+  {
+    "step": "comparison",
+    "decision": "keep both comparisons",
+    "chosen": "hard_infonce and patch_context_2x",
+    "rationale": "These are the two least certain choices. Soft targets depend on a near-twin threshold. Patch size matters because spot spacing is 1.88x the diameter, so a 2x patch adds context from the gaps between spots, and expression has spatial autocorrelation (median Moran's I 0.14) that context may capture. Together they use the remaining budget exactly.",
+    "alternatives_rejected": [
+      {
+        "option": "compare against a different image encoder",
+        "reason": "screening already separates them clearly (0.087 vs \u22640.063)"
+      }
+    ],
+    "evidence": {},
+    "source": "llm"
+  },
+  {
+    "step": "evaluation",
+    "decision": "keep retrieval recall@10 as the primary metric; keep prediction Pearson as secondary",
+    "chosen": "retrieval_mean_recall_at_10",
+    "rationale": "Retrieval is the first measurable task in the objective. Pearson on the top 50 genes, measured against ridge and CCA, covers the prediction goal. Group silhouette tracks how much patient effect is left in the joint space.",
+    "alternatives_rejected": [],
+    "evidence": {},
+    "source": "llm"
+  },
+  {
+    "step": "planner",
+    "decision": "planner used",
+    "chosen": "llm",
+    "rationale": "LLM adopted the rule-based proposal unchanged.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "llm_model": "claude-opus-5-5",
+      "n_changes": 0,
+      "changes": []
+    },
+    "source": "llm"
+  },
+  {
+    "step": "split",
+    "decision": "fold fold1",
+    "chosen": "8,709 train / 1,726 validation / 3,184 test samples",
+    "rationale": "Test groups: F, C; validation groups: H.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "sizes": {
+        "train": 8709,
+        "val": 1726,
+        "test": 3184
+      }
+    },
+    "source": "system"
+  },
+  {
+    "step": "split",
+    "decision": "fold fold2",
+    "chosen": "7,993 train / 2,065 validation / 3,561 test samples",
+    "rationale": "Test groups: E, D; validation groups: A.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "sizes": {
+        "train": 7993,
+        "val": 2065,
+        "test": 3561
+      }
+    },
+    "source": "system"
+  },
+  {
+    "step": "split",
+    "decision": "fold fold3",
+    "chosen": "8,349 train / 1,832 validation / 3,438 test samples",
+    "rationale": "Test groups: H, B; validation groups: D.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "sizes": {
+        "train": 8349,
+        "val": 1832,
+        "test": 3438
+      }
+    },
+    "source": "system"
+  },
+  {
+    "step": "split",
+    "decision": "fold fold4",
+    "chosen": "8,351 train / 1,832 validation / 3,436 test samples",
+    "rationale": "Test groups: G, A; validation groups: D.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "sizes": {
+        "train": 8351,
+        "val": 1832,
+        "test": 3436
+      }
+    },
+    "source": "system"
+  },
+  {
+    "step": "training",
+    "decision": "fit 'primary' on fold1",
+    "chosen": "best epoch 10 of 25",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0478; the best epoch's weights are kept.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_trainable_parameters": 1868753
+    },
+    "source": "system"
+  },
+  {
+    "step": "training",
+    "decision": "fit 'primary' on fold2",
+    "chosen": "best epoch 4 of 19",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0168; the best epoch's weights are kept.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_trainable_parameters": 1868753
+    },
+    "source": "system"
+  },
+  {
+    "step": "training",
+    "decision": "fit 'primary' on fold3",
+    "chosen": "best epoch 3 of 18",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0306; the best epoch's weights are kept.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_trainable_parameters": 1868753
+    },
+    "source": "system"
+  },
+  {
+    "step": "training",
+    "decision": "fit 'primary' on fold4",
+    "chosen": "best epoch 7 of 22",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0398; the best epoch's weights are kept.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_trainable_parameters": 1868753
+    },
+    "source": "system"
+  },
+  {
+    "step": "training",
+    "decision": "fit 'hard_infonce' on fold1",
+    "chosen": "best epoch 5 of 20",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0521; the best epoch's weights are kept.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_trainable_parameters": 1868753
+    },
+    "source": "system"
+  },
+  {
+    "step": "training",
+    "decision": "fit 'hard_infonce' on fold2",
+    "chosen": "best epoch 4 of 19",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0203; the best epoch's weights are kept.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_trainable_parameters": 1868753
+    },
+    "source": "system"
+  },
+  {
+    "step": "training",
+    "decision": "fit 'hard_infonce' on fold3",
+    "chosen": "best epoch 3 of 18",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0390; the best epoch's weights are kept.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_trainable_parameters": 1868753
+    },
+    "source": "system"
+  },
+  {
+    "step": "training",
+    "decision": "fit 'hard_infonce' on fold4",
+    "chosen": "best epoch 8 of 23",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0499; the best epoch's weights are kept.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_trainable_parameters": 1868753
+    },
+    "source": "system"
+  },
+  {
+    "step": "training",
+    "decision": "fit 'patch_context_2x' on fold1",
+    "chosen": "best epoch 8 of 23",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0495; the best epoch's weights are kept.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_trainable_parameters": 1868753
+    },
+    "source": "system"
+  },
+  {
+    "step": "training",
+    "decision": "fit 'patch_context_2x' on fold2",
+    "chosen": "best epoch 3 of 18",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0180; the best epoch's weights are kept.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_trainable_parameters": 1868753
+    },
+    "source": "system"
+  },
+  {
+    "step": "training",
+    "decision": "fit 'patch_context_2x' on fold3",
+    "chosen": "best epoch 3 of 18",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0349; the best epoch's weights are kept.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_trainable_parameters": 1868753
+    },
+    "source": "system"
+  },
+  {
+    "step": "training",
+    "decision": "fit 'patch_context_2x' on fold4",
+    "chosen": "best epoch 7 of 22",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0423; the best epoch's weights are kept.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_trainable_parameters": 1868753
+    },
+    "source": "system"
+  },
+  {
+    "step": "critic",
+    "decision": "trigger: no_clear_gain_over_ridge",
+    "chosen": "none",
+    "rationale": "No clear difference between the primary configuration and ridge on prediction_mean_pearson_top50 (mean difference -0.002; primary better in 2/4 folds).",
+    "alternatives_rejected": [],
+    "evidence": {
+      "severity": "info",
+      "suggested_changes": {}
+    },
+    "source": "critic"
+  },
+  {
+    "step": "critic",
+    "decision": "trigger: no_clear_gain_over_unimodal",
+    "chosen": "none",
+    "rationale": "No clear difference between the primary configuration and unimodal on clustering_ari (mean difference +0.039; primary better in 2/4 folds).",
+    "alternatives_rejected": [],
+    "evidence": {
+      "severity": "info",
+      "suggested_changes": {}
+    },
+    "source": "critic"
+  },
+  {
+    "step": "critic",
+    "decision": "trigger: no_clear_gain_over_cca",
+    "chosen": "none",
+    "rationale": "No clear difference between the primary configuration and cca on clustering_ari (mean difference +0.032; primary better in 3/4 folds).",
+    "alternatives_rejected": [],
+    "evidence": {
+      "severity": "info",
+      "suggested_changes": {}
+    },
+    "source": "critic"
+  },
+  {
+    "step": "critic",
+    "decision": "trigger: comparison_better",
+    "chosen": "none",
+    "rationale": "Comparison 'hard_infonce' scores higher than the primary on retrieval_mean_recall_at_10 (0.040 vs 0.034); within noise.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "severity": "info",
+      "suggested_changes": {}
+    },
+    "source": "critic"
+  },
+  {
+    "step": "critic",
+    "decision": "trigger: comparison_better",
+    "chosen": "none",
+    "rationale": "Comparison 'patch_context_2x' scores higher than the primary on retrieval_mean_recall_at_10 (0.036 vs 0.034); within noise.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "severity": "info",
+      "suggested_changes": {}
+    },
+    "source": "critic"
+  },
+  {
+    "step": "critic",
+    "decision": "revise the plan?",
+    "chosen": "promote 'hard_infonce' to primary",
+    "rationale": "The primary works but its scores are low. Its validation mean recall@10 is 0.0335, about 6x chance (\u22480.0054). It beats CCA (0.0179) in 4/4 folds, by +0.016 \u00b1 0.008. For image-to-expression prediction it only ties ridge: Pearson on the top 50 genes is 0.150 vs 0.152, and the primary is better in just 2/4 folds. The automatic flag calls hard_infonce's gain on recall@10 'within noise', but it beat the primary in every fold: +0.0043, +0.0041, +0.0084, +0.0101 (mean +0.0067, SD \u22480.003). patch_context_2x was also better in 4/4 folds, by less (+0.0025). The soft-target loss was chosen because 23% of spots have near-twins, but the evidence goes against that choice. On the same folds, hard InfoNCE gave higher recall@10 for every held-out patient group, by about 20% relative (0.040 vs 0.0335). A paired comparison over four folds gives t \u2248 4.5, which is small evidence but consistent. Switching needs no extra compute: the per-fold results already exist and already beat the primary. One caveat: all scores are best-epoch scores picked on validation, so they are slightly optimistic, but that bias is the same for both configurations. Training curves show early peaks (best epochs 3\u201310) in every configuration, and hard InfoNCE overfits faster (train loss falls to about 1.6 while validation scores drift down). Early stopping already copes with this.",
+    "alternatives_rejected": [
+      {
+        "option": "modify_primary: switch to infonce and add regularisation (dropout 0.3, weight_decay 0.01) and/or patch_context 2.0",
+        "reason": "Untested combined changes. Four folds at up to 180 s each would use about 720 of the 900 s left, and the gain is unclear. Early stopping already picks epochs before the drift, so extra regularisation may not raise the best-epoch score."
+      },
+      {
+        "option": "switch_primary to patch_context_2x",
+        "reason": "It was also better in 4/4 folds, but by only +0.0025 vs +0.0067 for hard_infonce."
+      },
+      {
+        "option": "none",
+        "reason": "A comparison was better in every fold at no extra cost, so keeping the weaker loss is not justified."
+      },
+      {
+        "option": "raise loss.cross_modal_regression.weight to beat ridge",
+        "reason": "The gap to ridge is -0.002 and changes sign across folds, so it is noise. The primary metric is retrieval."
+      }
+    ],
+    "evidence": {
+      "expected_effect": "Validation retrieval_mean_recall_at_10 should rise from about 0.0335 to about 0.040, roughly 7x chance. This is uncertain: the gain is small in absolute terms and rests on 4 folds. Prediction Pearson against ridge is not reported for hard_infonce. It will probably stay near ridge (\u22480.15), but it should be checked on the test data.",
+      "source": "llm"
+    },
+    "source": "critic"
+  },
+  {
+    "step": "critic",
+    "decision": "keep the revision?",
+    "chosen": "kept",
+    "rationale": "Validation retrieval_mean_recall_at_10: revised 0.0403 vs original 0.0335 (difference +0.0068; revised better in 4 of 4 folds). Kept: the primary metric improved.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "original": [
+        0.0478,
+        0.016,
+        0.0306,
+        0.0398
+      ],
+      "revised": [
+        0.0521,
+        0.0201,
+        0.039,
+        0.0499
+      ]
+    },
+    "source": "critic"
+  },
+  {
+    "step": "evaluation",
+    "decision": "held-out test result",
+    "chosen": "retrieval_mean_recall_at_10 0.0250",
+    "rationale": "Test data were scored once, after the critic, for 'hard_infonce' and every baseline (4 fold(s)).",
+    "alternatives_rejected": [],
+    "evidence": {
+      "per_fold": [
+        0.022141959798994977,
+        0.023869699522606008,
+        0.02617801047120419,
+        0.027793946449359723
+      ]
+    },
+    "source": "system"
+  },
+  {
+    "step": "writer",
+    "decision": "report prose",
+    "chosen": "LLM (claude-opus-5-5)",
+    "rationale": "178 numbers in the prose checked against the computed outputs; 0 not found.",
+    "alternatives_rejected": [],
+    "evidence": {
+      "n_checked": 178,
+      "n_unmatched": 0
+    },
+    "source": "system"
+  }
+]

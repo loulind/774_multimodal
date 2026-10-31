@@ -1,0 +1,294 @@
+{
+ "task": {
+  "raw_objective": "Learn joint embeddings of tissue image patches and spot-level gene expression to enable cross-modal retrieval and prediction of gene expression from histology.",
+  "tasks": [
+   "joint_embedding",
+   "retrieval",
+   "cross_modal_prediction"
+  ],
+  "primary_task": "retrieval",
+  "pair": [
+   "image",
+   "expression"
+  ],
+  "prediction": {
+   "source": "image",
+   "target": "expression"
+  },
+  "label_column": "label",
+  "label_evidence": "'label' is the only label column; used for evaluation only (not named in the objective)",
+  "modality_mentions": {
+   "image": [
+    "image",
+    "patches",
+    "histology"
+   ],
+   "expression": [
+    "gene",
+    "gene expression",
+    "expression"
+   ]
+  },
+  "evidence": {
+   "retrieval": [
+    "retrieval"
+   ],
+   "joint_embedding": [
+    "joint embeddings"
+   ],
+   "cross_modal_prediction": [
+    "prediction of gene expression from histology"
+   ]
+  },
+  "source": "llm"
+ },
+ "split": {
+  "strategy": "grouped_kfold",
+  "group_column": "patient",
+  "n_folds": 4,
+  "val_fraction": 0.1,
+  "test_fraction": 0.2,
+  "stratify_column": "label"
+ },
+ "configs": [
+  {
+   "name": "primary",
+   "role": "primary",
+   "strategy": "contrastive_alignment",
+   "fusion": "joint",
+   "modalities": [
+    {
+     "modality": "image",
+     "encoder": "phikon",
+     "regime": "frozen",
+     "trainable_blocks": 0,
+     "patch_context": 1.0,
+     "colour_normalisation": "reinhard",
+     "greyscale_to_rgb": false,
+     "augment": false,
+     "text_max_tokens": null,
+     "text_cleaning": "basic",
+     "n_variable_features": null,
+     "matrix_input": null,
+     "pca_components": null
+    },
+    {
+     "modality": "expression",
+     "encoder": "mlp",
+     "regime": "from_scratch",
+     "trainable_blocks": 0,
+     "patch_context": null,
+     "colour_normalisation": "none",
+     "greyscale_to_rgb": false,
+     "augment": false,
+     "text_max_tokens": null,
+     "text_cleaning": "basic",
+     "n_variable_features": 2000,
+     "matrix_input": "pca",
+     "pca_components": 100
+    }
+   ],
+   "losses": [
+    {
+     "name": "soft_infonce",
+     "weight": 1.0
+    },
+    {
+     "name": "cross_modal_regression",
+     "weight": 1.0
+    }
+   ],
+   "head": {
+    "embed_dim": 256,
+    "hidden_dim": 512,
+    "n_layers": 2,
+    "dropout": 0.1
+   },
+   "training": {
+    "batch_size": 512,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "max_epochs": 300,
+    "patience": 15,
+    "temperature_init": 0.07,
+    "learnable_temperature": true,
+    "soft_target_temperature": 0.1,
+    "finetune_lr": 0.00001,
+    "train_seconds": 180.0
+   },
+   "rationale": "Frozen phikon (best screening on recall@10, ridge R2 and probe F1) + MLP on 100 expression PCs; soft InfoNCE because 23% of expression spots have near-twins; joint regression head for image->expression prediction."
+  },
+  {
+   "name": "hard_infonce",
+   "role": "comparison",
+   "strategy": "contrastive_alignment",
+   "fusion": "joint",
+   "modalities": [
+    {
+     "modality": "image",
+     "encoder": "phikon",
+     "regime": "frozen",
+     "trainable_blocks": 0,
+     "patch_context": 1.0,
+     "colour_normalisation": "reinhard",
+     "greyscale_to_rgb": false,
+     "augment": false,
+     "text_max_tokens": null,
+     "text_cleaning": "basic",
+     "n_variable_features": null,
+     "matrix_input": null,
+     "pca_components": null
+    },
+    {
+     "modality": "expression",
+     "encoder": "mlp",
+     "regime": "from_scratch",
+     "trainable_blocks": 0,
+     "patch_context": null,
+     "colour_normalisation": "none",
+     "greyscale_to_rgb": false,
+     "augment": false,
+     "text_max_tokens": null,
+     "text_cleaning": "basic",
+     "n_variable_features": 2000,
+     "matrix_input": "pca",
+     "pca_components": 100
+    }
+   ],
+   "losses": [
+    {
+     "name": "infonce",
+     "weight": 1.0
+    },
+    {
+     "name": "cross_modal_regression",
+     "weight": 1.0
+    }
+   ],
+   "head": {
+    "embed_dim": 256,
+    "hidden_dim": 512,
+    "n_layers": 2,
+    "dropout": 0.1
+   },
+   "training": {
+    "batch_size": 512,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "max_epochs": 300,
+    "patience": 15,
+    "temperature_init": 0.07,
+    "learnable_temperature": true,
+    "soft_target_temperature": 0.1,
+    "finetune_lr": 0.00001,
+    "train_seconds": 135.0
+   },
+   "rationale": "Tests the soft-target decision (near-twin fraction 0.232)."
+  },
+  {
+   "name": "patch_context_2x",
+   "role": "comparison",
+   "strategy": "contrastive_alignment",
+   "fusion": "joint",
+   "modalities": [
+    {
+     "modality": "image",
+     "encoder": "phikon",
+     "regime": "frozen",
+     "trainable_blocks": 0,
+     "patch_context": 2.0,
+     "colour_normalisation": "reinhard",
+     "greyscale_to_rgb": false,
+     "augment": false,
+     "text_max_tokens": null,
+     "text_cleaning": "basic",
+     "n_variable_features": null,
+     "matrix_input": null,
+     "pca_components": null
+    },
+    {
+     "modality": "expression",
+     "encoder": "mlp",
+     "regime": "from_scratch",
+     "trainable_blocks": 0,
+     "patch_context": null,
+     "colour_normalisation": "none",
+     "greyscale_to_rgb": false,
+     "augment": false,
+     "text_max_tokens": null,
+     "text_cleaning": "basic",
+     "n_variable_features": 2000,
+     "matrix_input": "pca",
+     "pca_components": 100
+    }
+   ],
+   "losses": [
+    {
+     "name": "soft_infonce",
+     "weight": 1.0
+    },
+    {
+     "name": "cross_modal_regression",
+     "weight": 1.0
+    }
+   ],
+   "head": {
+    "embed_dim": 256,
+    "hidden_dim": 512,
+    "n_layers": 2,
+    "dropout": 0.1
+   },
+   "training": {
+    "batch_size": 512,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "max_epochs": 300,
+    "patience": 15,
+    "temperature_init": 0.07,
+    "learnable_temperature": true,
+    "soft_target_temperature": 0.1,
+    "finetune_lr": 0.00001,
+    "train_seconds": 135.0
+   },
+   "rationale": "Tests the patch-size decision: spot spacing is 1.88x the spot diameter, so a 2x patch adds surrounding tissue context up to about the neighbouring spots without overlapping their centres."
+  }
+ ],
+ "evaluation": {
+  "primary_metric": "retrieval_mean_recall_at_10",
+  "metrics": [
+   "retrieval_recall_at_k",
+   "prediction_pearson",
+   "linear_probe",
+   "knn_accuracy",
+   "clustering_ari_nmi",
+   "retrieval_label_match_at_k",
+   "alignment_uniformity",
+   "modality_gap",
+   "effective_rank",
+   "group_silhouette"
+  ],
+  "baselines": [
+   "unimodal",
+   "chance",
+   "cca",
+   "ridge",
+   "early_fusion",
+   "late_fusion"
+  ],
+  "label_column": "label",
+  "group_column": "patient",
+  "retrieval_ks": [
+   1,
+   5,
+   10
+  ],
+  "prediction_genes": 50
+ },
+ "downstream": [
+  "retrieval_examples",
+  "cross_modal_prediction",
+  "spatial_maps"
+ ],
+ "rationale": "Contrastive alignment of frozen phikon image features and an MLP on expression PCs, with a joint image->expression regression head. Evaluation uses grouped 4-fold CV over 8 patients, against CCA, ridge, unimodal, fusion and chance baselines.",
+ "source": "llm"
+}

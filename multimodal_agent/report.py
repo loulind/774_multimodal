@@ -39,9 +39,9 @@ EXPORT_MAX_BYTES = 5_000_000
 COMPARISON_METRICS = ["retrieval_mean_recall_at_10", "prediction_mean_pearson_top50", "probe_macro_f1",
                       "clustering_ari"]
 METRIC_LABEL = {"retrieval_mean_recall_at_10": "recall@10 (mean of both directions)",
-                "prediction_mean_pearson_top50": "mean Pearson r over the 50 most variable genes",
+                "prediction_mean_pearson_top50": "mean Pearson r over the 50 most variable target features",
                 "probe_macro_f1": "linear-probe macro-F1", "clustering_ari": "k-means adjusted Rand index"}
-SHORT_LABEL = {"retrieval_mean_recall_at_10": "recall@10", "prediction_mean_pearson_top50": "mean gene r",
+SHORT_LABEL = {"retrieval_mean_recall_at_10": "recall@10", "prediction_mean_pearson_top50": "mean target r",
                "probe_macro_f1": "probe macro-F1", "clustering_ari": "clustering ARI"}
 BOOT_FAMILY = {"retrieval_mean_recall_at_10": "retrieval", "probe_macro_f1": "probe",
                "prediction_mean_pearson_top50": "prediction"}
@@ -165,6 +165,12 @@ def metric_rows(agent, metric: str) -> list[dict]:
                      "value": mean, "sd": sd, "lo": lo, "hi": hi, "interval": interval,
                      "per_fold": [round(v, 4) for v in vals], "is_primary": base == primary})
     return sorted(rows, key=lambda r: -r["value"])
+
+
+def probe_chance(agent) -> float | None:
+    """Expected macro-F1 of guessing classes at random in proportion to their frequencies: 1/K."""
+    classes = agent.baselines(0, agent.config(agent.primary_name))["asm"].classes
+    return 1.0 / len(classes) if classes else None
 
 
 def _mean(xs):
@@ -301,7 +307,7 @@ def make_figures(agent, tables: dict) -> dict[str, str]:
                     or r["representation"] == "unimodal"]
         if not rows:
             continue
-        chance = None
+        chance = probe_chance(agent) if m == "probe_macro_f1" else None
         if m == "retrieval_mean_recall_at_10":
             chance = _mean([r["chance"]["R@10"] for f in agent.test_folds for r in list(f["retrieval"].values())[:1]])
         panels.append({"title": f"Test {METRIC_LABEL[m]}", "rows": rows, "chance": chance,
@@ -429,14 +435,15 @@ def build_record(agent) -> dict:
     downstream = {"fold": ds_res.get("fold")}
     if ds_res.get("prediction"):
         downstream["prediction"] = {"method": ds_res["prediction"]["method"],
-                                    "best_genes": ds_res["prediction"]["best_genes"][:6]}
+                                    "best_features": ds_res["prediction"]["best_features"][:6]}
     if ds_res.get("confusion"):
         c = ds_res["confusion"]
         downstream["classification"] = {"view": c["view"], "macro_f1": c["macro_f1"],
                                         "balanced_accuracy": c["balanced_accuracy"], "per_class_f1": c["per_class_f1"]}
     if ds_res.get("cluster_map"):
         downstream["clustering"] = {"k": ds_res["cluster_map"]["k"], "ari": ds_res["cluster_map"].get("ari"),
-                                    "slide": ds_res["cluster_map"].get("group")}
+                                    "group_column": ds_res["cluster_map"].get("group_column"),
+                                    "group": ds_res["cluster_map"].get("group")}
     if ds_res.get("retrieval_examples"):
         ex = ds_res["retrieval_examples"]
         downstream["retrieval_examples"] = {
@@ -467,7 +474,11 @@ def build_record(agent) -> dict:
         "training": {n: [{k: fr.record[k] for k in ("best_epoch", "epochs_run", "stopped_because", "best_val_score")}
                          for (name, _), fr in agent.fits.items() if name == n] for n in agent.trained()},
         "test": {"primary": agent.primary_name, "primary_metric": pm, "n_folds": len(agent.test_folds),
-                 "chance_recall_at_10": chance, "results": res, "retrieval": retrieval_table(agent),
+                 "chance_recall_at_10": chance, "gallery_size_for_recall": S.GALLERY_SIZE,
+                 "probe_chance_macro_f1": probe_chance(agent),
+                 "prediction_method_rule": "a configuration's own regression head if it has one, else kNN in its "
+                                           "joint space; fixed in advance, never chosen on test data",
+                 "results": res, "retrieval": retrieval_table(agent),
                  "prediction": prediction_table(agent)[:8], "comparisons": agent.test_comparisons,
                  "flags": agent.test_flags},
         "validation": {"comparisons": agent.val_comparisons, "flags": agent.val_flags},
@@ -567,6 +578,9 @@ def template_sections(record: dict) -> dict[str, str]:
         others = [r for r in rows if r is not p][:3]
         lines.append(f"- **{METRIC_LABEL[m]}**: " + (f"{p['name']} {f3(p['value'])}{_iv(p)}; " if p else "")
                      + "; ".join(f"{r['name']} {f3(r['value'])}" for r in others) + ".")
+    if test.get("probe_chance_macro_f1") and test["results"].get("probe_macro_f1"):
+        lines.append(f"- Random guessing in proportion to class frequencies gives macro-F1 "
+                     f"{f3(test['probe_chance_macro_f1'])} (1/K).")
     ret = next((r for r in test["retrieval"] if r["representation"] == primary), None)
     if ret and ret.get("label_match_at_10") is not None:
         lines.append(f"- Retrieved matches share the query's label {pct(ret['label_match_at_10'])} of the time "
@@ -659,7 +673,7 @@ def methods_summary(agent) -> str:
             if m.patch_context is not None:
                 bits.append(f"patch = {m.patch_context} x the spot diameter")
             if m.colour_normalisation != "none":
-                bits.append(f"{m.colour_normalisation} colour normalisation per slide/group")
+                bits.append(f"{m.colour_normalisation} colour normalisation per image group")
             if m.greyscale_to_rgb:
                 bits.append("greyscale replicated to RGB")
             if m.text_max_tokens:
@@ -711,6 +725,7 @@ th, td { border-bottom: 1px solid var(--rule); padding: 4px 10px; text-align: le
   font-variant-numeric: tabular-nums; } th { color: var(--ink2); font-weight: 600; }
 img { max-width: 100%; height: auto; background: #fcfcfb; border-radius: 6px; }
 .meta { color: var(--ink2); font-size: 13px; }
+@media (max-width: 640px) { body { padding: 0; } main { padding: 16px; border-radius: 0; } }
 """
 
 
@@ -732,7 +747,7 @@ def report_markdown(agent, record: dict, prose: dict, figs: dict, tables: dict, 
         return f"![{caption}]({figs[key]})\n\n*{caption}*\n" if key in figs else ""
 
     rows_for = {m: tables.get(f"test_{m}") or [] for m in COMPARISON_METRICS}
-    llm = record["llm"]
+    llm = manifest["llm"]                       # after the writer's call (the record was built before it)
     out = ["# Multimodal representation learning report", "",
            f"<p class=\"meta\">Objective: “{agent.objective}”<br>Data: <code>{agent.data_path}</code> · "
            f"generated {manifest['finished'][:16].replace('T', ' ')} UTC · plan: {agent.plan.source} · "
@@ -764,8 +779,8 @@ def report_markdown(agent, record: dict, prose: dict, figs: dict, tables: dict, 
     if tables["prediction"]:
         out += ["### Cross-modal prediction", "", md_table(tables["prediction"], [
             ("method", "method"), ("mean_r_top50", "mean r (top 50)"), ("median_r_top50", "median r"),
-            ("within_group_mean_r_top50", "within-slide r"), ("mean_r_all", "mean r (all)"),
-            ("n_genes_r_gt_0.3", "genes r > 0.3")]), ""]
+            ("within_group_mean_r_top50", "within-group r"), ("mean_r_all", "mean r (all)"),
+            ("n_genes_r_gt_0.3", "features r > 0.3")]), ""]
     if tables["classification"]:
         out += ["### Classification and clustering", "", md_table(tables["classification"], [
             ("representation", "representation"), ("view", "view"), ("probe_macro_f1", "probe macro-F1"),
@@ -783,15 +798,16 @@ def report_markdown(agent, record: dict, prose: dict, figs: dict, tables: dict, 
                 ("difference_ci95", "95% interval"), ("folds_primary_better", "folds better"), ("n_folds", "folds")]),
             "", "## Downstream analyses", "",
             fig("retrieval_examples", "Held-out queries and their five nearest matches in the joint space."),
-            fig("prediction_maps", "Observed and predicted expression of the best-predicted genes on a held-out slide."),
+            fig("prediction_maps", "Observed and predicted values of the best-predicted target features on one "
+                "held-out group (z-scores within the group)."),
             fig("confusion", "Confusion matrix of the linear probe (rows: true class)."),
             fig("cluster_map", "k-means clusters of held-out joint embeddings and their label composition."),
             fig("embedding_map", "Held-out joint embeddings of both modalities."),
             fig("training_curves", "Validation score and training loss by epoch.")]
     pred = record["downstream"].get("prediction")
     if pred:
-        out += ["Best-predicted genes (" + pred["method"] + "):", "",
-                md_table(pred["best_genes"], [("gene", "gene"), ("r", "test r")]), ""]
+        out += ["Best-predicted target features (" + pred["method"] + "):", "",
+                md_table(pred["best_features"], [("gene", "feature"), ("r", "test r")]), ""]
     out += ["## Critic review", "", sec["critic_and_revision"], "",
             md_table([{"code": x["code"], "severity": x["severity"], "message": x["message"]}
                       for x in (record["critic"] or {}).get("triggers", [])],

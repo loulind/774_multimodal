@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Multimodal representation learning report</title><style>
+:root { color-scheme: light; --bg: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e;
+  --muted: #898781; --rule: #e1e0d9; --accent: #2a78d6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d0d0d;
+  --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781; --rule: #2c2c2a; --accent: #3987e5; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7;
+  --muted: #898781; --rule: #2c2c2a; --accent: #3987e5; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  margin: 0; padding: 24px 16px; }
+main { max-width: 980px; margin: 0 auto; background: var(--surface); padding: 24px 28px; border-radius: 8px; }
+h1 { font-size: 1.6em; line-height: 1.25; } h2 { margin-top: 1.8em; border-bottom: 1px solid var(--rule);
+  padding-bottom: 4px; } h3 { margin-top: 1.4em; }
+a { color: var(--accent); } code { font-size: 0.92em; }
+table { border-collapse: collapse; font-size: 13px; margin: 10px 0 18px; display: block; overflow-x: auto; }
+th, td { border-bottom: 1px solid var(--rule); padding: 4px 10px; text-align: left; vertical-align: top;
+  font-variant-numeric: tabular-nums; } th { color: var(--ink2); font-weight: 600; }
+img { max-width: 100%; height: auto; background: #fcfcfb; border-radius: 6px; }
+.meta { color: var(--ink2); font-size: 13px; }
+@media (max-width: 640px) { body { padding: 0; } main { padding: 16px; border-radius: 0; } }
+</style></head><body><main>
+<h1>Multimodal representation learning report</h1>
+<p class="meta">Objective: “Learn joint embeddings of tissue image patches and spot-level gene expression to enable cross-modal retrieval and prediction of gene expression from histology.”<br>Data: <code>data/stimage_her2</code> · generated 2026-10-31 15:46 UTC · plan: llm · prose: LLM (claude-opus-5-5)</p>
+
+<h2>Summary</h2>
+<p>The goal was to learn a joint embedding of histology spot patches and spot-level gene expression, to support image↔expression retrieval and prediction of expression from histology. The agent used grouped 4-fold cross-validation by patient and CLIP-style contrastive alignment, pairing a frozen <strong>phikon</strong> image encoder with an MLP trained from scratch on 100 expression PCs. After the critic's review, the hard-InfoNCE configuration replaced the soft-InfoNCE one as primary.</p>
+<ul>
+<li><strong>Retrieval works, at a low absolute level.</strong> On held-out patients, the primary's mean recall@10 is <strong>0.025 ± 0.002</strong> (±1 SD over 4 folds). Chance is 0.003 and linear CCA reaches 0.012. The gain over CCA is +0.013 (SD 0.002) and holds in 4/4 folds.</li>
+<li><strong>Prediction ties ridge regression.</strong> Mean Pearson r on the top-50 genes is 0.171 against 0.180 for ridge (difference −0.009, SD 0.037; better in 2/4 folds).</li>
+<li><strong>Label probes and clustering show no clear gain</strong> over unimodal features or fusion baselines.</li>
+<li><strong>Patient effects dominate the embedding.</strong> Held-out embeddings cluster more by patient (silhouette 0.40) than by tissue label (0.09).</li>
+</ul>
+<p>Bottom line: contrastive integration clearly beats linear alignment for cross-modal retrieval. It does not beat a ridge model on frozen image features for expression prediction.</p>
+<h2>Data and objective</h2>
+<p><strong>Data.</strong> The record describes a spatial AnnData object with 13,620 spots. All spots have image patches and spatial coordinates; 13,619 have expression (11,871 genes). One spot lacks expression and was left out of alignment.</p>
+<p><strong>What shaped the decisions:</strong>
+- <strong>Strong patient structure.</strong> Patient explains 77% of the variance of the top expression components, with a group silhouette of 0.634. There are 36 slides nested within 8 patients. Spots are not independent within a patient, so whole patients had to be held out.
+- <strong>Spatial autocorrelation.</strong> Median Moran's I is 0.14. Spot spacing is 1.88× the spot diameter (145 px), which is why a larger-patch comparison was worth testing.
+- <strong>Near-duplicate expression profiles.</strong> 23.2% of expression spots have a near-twin. Treating every other spot in a batch as a negative would therefore often create false negatives, which motivated soft InfoNCE.
+- <strong>Sparse counts.</strong> The counts are integers, 83% zeros, with a median library size of 3,231. This motivated normalisation, log1p, selection of variable genes and PCA.
+- <strong>Stain and scanner differences.</strong> 28% of the variance in mean patch colour lies between patients, which motivated Reinhard colour normalisation.
+- <strong>Sparse, imbalanced labels.</strong> The tissue <code>label</code> has 6 classes on 3,157 spots (23%), with an imbalance ratio of 18.124: 1,758 invasive cancer versus 97 breast glands. The objective does not name the label, so it was used only for evaluation. Label variance share in expression is 0.158, far below the patient share.</p>
+<h2>What the agent decided and why</h2>
+<ul>
+<li><strong>Split:</strong> grouped 4-fold CV by patient. Each fold tests 2 patients and holds out 1 patient for validation, leaving about 8.5k training pairs per fit; test sets have 3,184–3,561 spots. This was chosen because of the 77% patient variance share and the spatial autocorrelation. Note that patient D was the validation group in both fold 3 and fold 4.</li>
+<li><strong>Strategy:</strong> contrastive alignment (CLIP-style), because the objective needs a shared space and about 8,511 training pairs are available.</li>
+<li><strong>Image encoder:</strong> frozen phikon. Four candidates were screened on 2,000 training and 500 validation spots from separate patients. Phikon was best on every metric:</li>
+<li>recall@10: 0.087 (next best 0.063);</li>
+<li>ridge R²: 0.215 (next best 0.184);</li>
+<li>probe F1: 0.432 (next best 0.39).</li>
+</ul>
+<p>PLIP, BiomedCLIP and DINOv2 were rejected. Fine-tuning was not tried, because none of the encoders is a pre-aligned dual encoder and a frozen backbone keeps variance low.
+- <strong>Expression encoder and preprocessing:</strong>
+  - an MLP trained from scratch;
+  - library-size normalisation to the median, then log1p;
+  - the 2,000 most variable genes, then PCA to 100 components, all fitted on training folds only.
+- <strong>Image preprocessing:</strong> patches of 1.0× the spot diameter, so each patch covers the tissue the RNA came from, plus Reinhard colour normalisation.
+- <strong>Losses:</strong> soft InfoNCE (because of the 23% near-twins) plus a cross-modal regression head (because the objective asks for prediction). No supervised cross-entropy, because the labels are evaluation-only.
+- <strong>Hyperparameters:</strong>
+  - 256-d embedding, 512 hidden units, dropout 0.1;
+  - learning rate 0.001, batch size 512 (511 negatives per positive);
+  - temperature learned, starting from 0.07;
+  - early stopping with patience 15 and a 180 s cap per fit.
+- <strong>Comparisons:</strong> two configurations tested the least certain choices. <code>hard_infonce</code> tested the soft-target choice; <code>patch_context_2x</code> tested the patch size.
+- <strong>Evaluation:</strong> the primary metric is mean recall@10. Secondary metrics are top-50-gene Pearson against ridge and CCA, label probes and ARI against unimodal and fusion baselines, and patient silhouette.
+- <strong>Planner:</strong> the LLM planner adopted the rule-based proposal unchanged.</p>
+<h3>Configurations trained</h3>
+<table>
+<thead>
+<tr>
+<th>configuration</th>
+<th>role</th>
+<th>strategy</th>
+<th>encoders</th>
+<th>regime</th>
+<th>losses</th>
+<th>dim</th>
+<th>lr</th>
+<th>cap (s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>primary</td>
+<td>primary</td>
+<td>contrastive_alignment</td>
+<td>image: phikon, expression: mlp</td>
+<td>frozen, from_scratch</td>
+<td>soft_infonce x 1.0, cross_modal_regression x 1.0</td>
+<td>256</td>
+<td>0.001</td>
+<td>180</td>
+</tr>
+<tr>
+<td>hard_infonce</td>
+<td>comparison</td>
+<td>contrastive_alignment</td>
+<td>image: phikon, expression: mlp</td>
+<td>frozen, from_scratch</td>
+<td>infonce x 1.0, cross_modal_regression x 1.0</td>
+<td>256</td>
+<td>0.001</td>
+<td>135</td>
+</tr>
+<tr>
+<td>patch_context_2x</td>
+<td>comparison</td>
+<td>contrastive_alignment</td>
+<td>image: phikon, expression: mlp</td>
+<td>frozen, from_scratch</td>
+<td>soft_infonce x 1.0, cross_modal_regression x 1.0</td>
+<td>256</td>
+<td>0.001</td>
+<td>135</td>
+</tr>
+</tbody>
+</table>
+<h3>Encoder screening (frozen features, training vs validation samples of fold 1)</h3>
+<table>
+<thead>
+<tr>
+<th>image</th>
+<th>expression</th>
+<th>cca_recall_at_10</th>
+<th>zero_shot_recall_at_10</th>
+<th>alignment_recall_at_10</th>
+<th>ridge_r2</th>
+<th>probe_macro_f1</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>phikon</td>
+<td>mlp</td>
+<td>0.087</td>
+<td>–</td>
+<td>0.087</td>
+<td>0.215</td>
+<td>0.432</td>
+</tr>
+<tr>
+<td>plip_image</td>
+<td>mlp</td>
+<td>0.057</td>
+<td>–</td>
+<td>0.057</td>
+<td>0.175</td>
+<td>0.340</td>
+</tr>
+<tr>
+<td>biomedclip_image</td>
+<td>mlp</td>
+<td>0.063</td>
+<td>–</td>
+<td>0.063</td>
+<td>0.026</td>
+<td>0.392</td>
+</tr>
+<tr>
+<td>dinov2_base</td>
+<td>mlp</td>
+<td>0.063</td>
+<td>–</td>
+<td>0.063</td>
+<td>0.184</td>
+<td>0.351</td>
+</tr>
+</tbody>
+</table>
+<h2>Results on held-out test data</h2>
+<p>All figures are on held-out patients: mean ± 1 SD over 4 folds.</p>
+<p><strong>Retrieval (primary metric)</strong>
+- <strong>Recall@10</strong> across the full test fold:</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Recall@10</th>
+<th>SD</th>
+<th>Folds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>hard_infonce (primary)</td>
+<td>0.025</td>
+<td>0.002</td>
+<td>0.0221–0.0278</td>
+</tr>
+<tr>
+<td>patch_context_2x</td>
+<td>0.021</td>
+<td>0.002</td>
+<td>—</td>
+</tr>
+<tr>
+<td>soft InfoNCE (original primary)</td>
+<td>0.020</td>
+<td>0.004</td>
+<td>—</td>
+</tr>
+<tr>
+<td>CCA</td>
+<td>0.012</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Chance</td>
+<td>0.003</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Other ranks:</strong> R@1 is 0.003 and R@5 is 0.014. The median partner rank is 577.5, against 1047.125 for CCA.</li>
+<li><strong>Smaller gallery:</strong> with a gallery of 1,000 spots, recall@10 is 0.067 (CCA 0.034).</li>
+<li><strong>Both directions are similar:</strong> image→expression 0.026 and expression→image 0.024.</li>
+<li><strong>Semantic retrieval is better than exact retrieval.</strong> 60.4% of the top-10 neighbours share the query's tissue label (label_match 0.604), against 0.448 by chance and 0.531 for CCA. The embedding retrieves the right kind of tissue far more often than the exact partner spot.</li>
+<li><strong>Per-query examples (fold 1)</strong> vary widely: partner ranks run from 16 to 1331.</li>
+</ul>
+<p><strong>Cross-modal prediction (image → expression, top-50 genes)</strong>
+- The primary's regression head reaches mean r 0.171 (SD 0.013). Ridge reaches 0.180 (SD 0.045, folds 0.1309–0.2388), a statistical tie.
+- kNN in the joint space is worse (0.144–0.164) than any regression head.
+- The patch_context_2x head has the highest mean, 0.188 (SD 0.005), with 158.25 genes at r &gt; 0.3 against 137.75 for ridge. This is a descriptive test-set observation, not a pre-specified comparison.
+- Within-patient correlations are similar across methods: 0.143 for the primary and 0.146 for ridge. Mean r over all genes is 0.093 for both.
+- The best-predicted genes in fold 1 include PTMS (r 0.726), COL3A1 (0.626) and MMP14 (0.616).</p>
+<p><strong>Label probe (macro-F1, chance 0.167)</strong>
+- The primary's fused embedding reaches 0.297 (SD 0.113), which is above chance.
+- It is below the unimodal baseline (0.341), early fusion (0.357) and late fusion (0.319), and above CCA (fused) at 0.258.
+- None of these differences is clear, because SDs are 0.076–0.099 and wins range from 1/4 to 3/4 folds.</p>
+<p><strong>Clustering (ARI)</strong>
+- The primary's fused embedding reaches 0.232 (SD 0.075), against 0.243 for unimodal (difference −0.011, SD 0.094) and 0.231 for CCA (difference +0.001, SD 0.112).
+- patch_context_2x (fused) has the highest mean, 0.288 (SD 0.100).</p>
+<p><img alt="Test metrics for every configuration (blue: final configuration) and baseline (grey)." src="figures/comparison.png" /></p>
+<p><em>Test metrics for every configuration (blue: final configuration) and baseline (grey).</em></p>
+<h3>recall@10 (mean of both directions) (primary metric)</h3>
+<table>
+<thead>
+<tr>
+<th>representation</th>
+<th>kind</th>
+<th>mean</th>
+<th>lower</th>
+<th>upper</th>
+<th>interval</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>hard_infonce</td>
+<td>configuration</td>
+<td>0.025</td>
+<td>0.023</td>
+<td>0.027</td>
+<td>±1 SD over 4 folds</td>
+</tr>
+<tr>
+<td>patch_context_2x</td>
+<td>configuration</td>
+<td>0.021</td>
+<td>0.018</td>
+<td>0.023</td>
+<td>±1 SD over 4 folds</td>
+</tr>
+<tr>
+<td>primary</td>
+<td>configuration</td>
+<td>0.020</td>
+<td>0.016</td>
+<td>0.023</td>
+<td>±1 SD over 4 folds</td>
+</tr>
+<tr>
+<td>cca</td>
+<td>baseline</td>
+<td>0.012</td>
+<td>0.010</td>
+<td>0.013</td>
+<td>±1 SD over 4 folds</td>
+</tr>
+</tbody>
+</table>
+<h3>Retrieval</h3>
+<table>
+<thead>
+<tr>
+<th>representation</th>
+<th>R@1</th>
+<th>R@5</th>
+<th>R@10</th>
+<th>image→expression R@10</th>
+<th>expression→image R@10</th>
+<th>median rank</th>
+<th>chance R@10</th>
+<th>label match@10</th>
+<th>label chance</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>primary</td>
+<td>0.003</td>
+<td>0.011</td>
+<td>0.020</td>
+<td>0.023</td>
+<td>0.017</td>
+<td>668.250</td>
+<td>0.003</td>
+<td>0.594</td>
+<td>0.448</td>
+</tr>
+<tr>
+<td>hard_infonce</td>
+<td>0.003</td>
+<td>0.014</td>
+<td>0.025</td>
+<td>0.026</td>
+<td>0.024</td>
+<td>577.500</td>
+<td>0.003</td>
+<td>0.604</td>
+<td>0.448</td>
+</tr>
+<tr>
+<td>patch_context_2x</td>
+<td>0.003</td>
+<td>0.011</td>
+<td>0.021</td>
+<td>0.021</td>
+<td>0.020</td>
+<td>684.875</td>
+<td>0.003</td>
+<td>0.589</td>
+<td>0.448</td>
+</tr>
+<tr>
+<td>cca</td>
+<td>0.001</td>
+<td>0.006</td>
+<td>0.012</td>
+<td>0.012</td>
+<td>0.011</td>
+<td>1047.125</td>
+<td>0.003</td>
+<td>0.531</td>
+<td>0.448</td>
+</tr>
+</tbody>
+</table>
+<h3>Cross-modal prediction</h3>
+<table>
+<thead>
+<tr>
+<th>method</th>
+<th>mean r (top 50)</th>
+<th>median r</th>
+<th>within-group r</th>
+<th>mean r (all)</th>
+<th>features r &gt; 0.3</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>patch_context_2x:head</td>
+<td>0.188</td>
+<td>0.175</td>
+<td>0.144</td>
+<td>0.099</td>
+<td>158.2</td>
+</tr>
+<tr>
+<td>ridge</td>
+<td>0.180</td>
+<td>0.186</td>
+<td>0.146</td>
+<td>0.093</td>
+<td>137.8</td>
+</tr>
+<tr>
+<td>hard_infonce:head</td>
+<td>0.171</td>
+<td>0.154</td>
+<td>0.143</td>
+<td>0.093</td>
+<td>132.8</td>
+</tr>
+<tr>
+<td>primary:head</td>
+<td>0.168</td>
+<td>0.162</td>
+<td>0.144</td>
+<td>0.092</td>
+<td>134.8</td>
+</tr>
+<tr>
+<td>patch_context_2x:knn</td>
+<td>0.164</td>
+<td>0.153</td>
+<td>0.139</td>
+<td>0.085</td>
+<td>113.8</td>
+</tr>
+<tr>
+<td>primary:knn</td>
+<td>0.149</td>
+<td>0.150</td>
+<td>0.136</td>
+<td>0.082</td>
+<td>103.8</td>
+</tr>
+<tr>
+<td>hard_infonce:knn</td>
+<td>0.144</td>
+<td>0.148</td>
+<td>0.133</td>
+<td>0.084</td>
+<td>106.2</td>
+</tr>
+</tbody>
+</table>
+<h3>Classification and clustering</h3>
+<table>
+<thead>
+<tr>
+<th>representation</th>
+<th>view</th>
+<th>probe macro-F1</th>
+<th>balanced acc.</th>
+<th>kNN macro-F1</th>
+<th>ARI</th>
+<th>NMI</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>patch_context_2x</td>
+<td>fused</td>
+<td>0.368</td>
+<td>0.535</td>
+<td>0.396</td>
+<td>0.288</td>
+<td>0.336</td>
+</tr>
+<tr>
+<td>early_fusion</td>
+<td>concat</td>
+<td>0.357</td>
+<td>0.505</td>
+<td>–</td>
+<td>–</td>
+<td>–</td>
+</tr>
+<tr>
+<td>patch_context_2x</td>
+<td>image</td>
+<td>0.356</td>
+<td>0.496</td>
+<td>0.364</td>
+<td>0.283</td>
+<td>0.349</td>
+</tr>
+<tr>
+<td>cca</td>
+<td>image</td>
+<td>0.342</td>
+<td>0.465</td>
+<td>0.335</td>
+<td>0.179</td>
+<td>0.276</td>
+</tr>
+<tr>
+<td>unimodal</td>
+<td>image</td>
+<td>0.324</td>
+<td>0.482</td>
+<td>0.349</td>
+<td>0.209</td>
+<td>0.312</td>
+</tr>
+<tr>
+<td>late_fusion</td>
+<td>average</td>
+<td>0.319</td>
+<td>0.464</td>
+<td>–</td>
+<td>–</td>
+<td>–</td>
+</tr>
+<tr>
+<td>primary</td>
+<td>image</td>
+<td>0.307</td>
+<td>0.466</td>
+<td>0.322</td>
+<td>0.201</td>
+<td>0.300</td>
+</tr>
+<tr>
+<td>hard_infonce</td>
+<td>image</td>
+<td>0.304</td>
+<td>0.446</td>
+<td>0.345</td>
+<td>0.215</td>
+<td>0.298</td>
+</tr>
+<tr>
+<td>hard_infonce</td>
+<td>fused</td>
+<td>0.297</td>
+<td>0.425</td>
+<td>0.326</td>
+<td>0.232</td>
+<td>0.292</td>
+</tr>
+<tr>
+<td>primary</td>
+<td>fused</td>
+<td>0.292</td>
+<td>0.415</td>
+<td>0.341</td>
+<td>0.244</td>
+<td>0.306</td>
+</tr>
+<tr>
+<td>cca</td>
+<td>fused</td>
+<td>0.258</td>
+<td>0.337</td>
+<td>0.289</td>
+<td>0.231</td>
+<td>0.311</td>
+</tr>
+<tr>
+<td>unimodal</td>
+<td>expression</td>
+<td>0.245</td>
+<td>0.346</td>
+<td>0.232</td>
+<td>0.165</td>
+<td>0.234</td>
+</tr>
+<tr>
+<td>primary</td>
+<td>expression</td>
+<td>0.244</td>
+<td>0.357</td>
+<td>0.264</td>
+<td>0.158</td>
+<td>0.225</td>
+</tr>
+<tr>
+<td>hard_infonce</td>
+<td>expression</td>
+<td>0.244</td>
+<td>0.332</td>
+<td>0.283</td>
+<td>0.164</td>
+<td>0.231</td>
+</tr>
+<tr>
+<td>patch_context_2x</td>
+<td>expression</td>
+<td>0.239</td>
+<td>0.347</td>
+<td>0.271</td>
+<td>0.154</td>
+<td>0.220</td>
+</tr>
+<tr>
+<td>cca</td>
+<td>expression</td>
+<td>0.229</td>
+<td>0.355</td>
+<td>0.197</td>
+<td>0.129</td>
+<td>0.221</td>
+</tr>
+</tbody>
+</table>
+<h3>Embedding geometry</h3>
+<table>
+<thead>
+<tr>
+<th>representation</th>
+<th>alignment</th>
+<th>uniformity a</th>
+<th>uniformity b</th>
+<th>modality gap</th>
+<th>eff. rank a</th>
+<th>eff. rank b</th>
+<th>group silhouette</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>primary</td>
+<td>1.361</td>
+<td>-1.956</td>
+<td>-1.683</td>
+<td>0.654</td>
+<td>129.663</td>
+<td>135.116</td>
+<td>0.413</td>
+</tr>
+<tr>
+<td>hard_infonce</td>
+<td>1.300</td>
+<td>-2.319</td>
+<td>-1.975</td>
+<td>0.548</td>
+<td>127.680</td>
+<td>128.837</td>
+<td>0.353</td>
+</tr>
+<tr>
+<td>patch_context_2x</td>
+<td>1.375</td>
+<td>-1.832</td>
+<td>-1.658</td>
+<td>0.685</td>
+<td>126.555</td>
+<td>133.194</td>
+<td>0.419</td>
+</tr>
+<tr>
+<td>cca</td>
+<td>1.754</td>
+<td>-3.163</td>
+<td>-2.755</td>
+<td>0.466</td>
+<td>57.815</td>
+<td>58.000</td>
+<td>0.265</td>
+</tr>
+</tbody>
+</table>
+<h2>Did integration help?</h2>
+<ul>
+<li><strong>Against linear alignment (CCA): yes, for retrieval.</strong> Recall@10 is 0.025 against 0.012, a difference of +0.013 (SD 0.002) that holds in 4/4 folds. This is the clearest effect in the run and the gap is large relative to its spread. The validation data agree: the soft-InfoNCE primary beat CCA by +0.016 ± 0.008, also in 4/4 folds.</li>
+<li><strong>Against ridge regression for prediction: no.</strong> The difference is −0.009 (SD 0.037), with the primary better in 2/4 folds. The range of the difference comfortably includes zero, so joint training adds nothing measurable over a linear map from frozen phikon features. The same tie appeared on validation (0.150 vs 0.152).</li>
+<li><strong>Against each modality alone and against fusion, for label probes: no clear gain.</strong> The fused embedding's macro-F1 falls below the unimodal baseline (−0.044, SD 0.090, better in 1/4 folds), early fusion (−0.060, SD 0.088, 1/4) and late fusion (−0.022, SD 0.099, 2/4). The only positive difference is against CCA (+0.038, SD 0.076, 3/4), and it is not clear either. The image side carries most of the label signal: unimodal image features reach 0.324 and unimodal expression features 0.245.</li>
+<li><strong>Clustering: a tie</strong> with unimodal features (−0.011) and with CCA (+0.001), with SDs of about 0.1.</li>
+</ul>
+<p>Summary: the joint space is useful for cross-modal <em>retrieval</em>, where it clearly beats linear alignment. For predicting expression and for representing tissue type, it ties simpler methods; these ties are findings, not failures. Integration did not reduce patient effects: patient silhouette is 0.40, against 0.09 for label.</p>
+<table>
+<thead>
+<tr>
+<th>metric</th>
+<th>versus</th>
+<th>final config</th>
+<th>alternative</th>
+<th>difference</th>
+<th>SD</th>
+<th>95% interval</th>
+<th>folds better</th>
+<th>folds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>retrieval_mean_recall_at_10</td>
+<td>cca</td>
+<td>0.025</td>
+<td>0.012</td>
+<td>0.013</td>
+<td>0.002</td>
+<td>–</td>
+<td>4</td>
+<td>4</td>
+</tr>
+<tr>
+<td>prediction_mean_pearson_top50</td>
+<td>ridge</td>
+<td>0.171</td>
+<td>0.180</td>
+<td>-0.009</td>
+<td>0.037</td>
+<td>–</td>
+<td>2</td>
+<td>4</td>
+</tr>
+<tr>
+<td>probe_macro_f1</td>
+<td>unimodal</td>
+<td>0.297</td>
+<td>0.341</td>
+<td>-0.044</td>
+<td>0.090</td>
+<td>–</td>
+<td>1</td>
+<td>4</td>
+</tr>
+<tr>
+<td>probe_macro_f1</td>
+<td>early_fusion</td>
+<td>0.297</td>
+<td>0.357</td>
+<td>-0.060</td>
+<td>0.088</td>
+<td>–</td>
+<td>1</td>
+<td>4</td>
+</tr>
+<tr>
+<td>probe_macro_f1</td>
+<td>late_fusion</td>
+<td>0.297</td>
+<td>0.319</td>
+<td>-0.022</td>
+<td>0.099</td>
+<td>–</td>
+<td>2</td>
+<td>4</td>
+</tr>
+<tr>
+<td>probe_macro_f1</td>
+<td>cca</td>
+<td>0.297</td>
+<td>0.258</td>
+<td>0.038</td>
+<td>0.076</td>
+<td>–</td>
+<td>3</td>
+<td>4</td>
+</tr>
+<tr>
+<td>clustering_ari</td>
+<td>unimodal</td>
+<td>0.232</td>
+<td>0.243</td>
+<td>-0.011</td>
+<td>0.094</td>
+<td>–</td>
+<td>2</td>
+<td>4</td>
+</tr>
+<tr>
+<td>clustering_ari</td>
+<td>cca</td>
+<td>0.232</td>
+<td>0.231</td>
+<td>0.001</td>
+<td>0.112</td>
+<td>–</td>
+<td>2</td>
+<td>4</td>
+</tr>
+</tbody>
+</table>
+<h2>Downstream analyses</h2>
+<p><img alt="Held-out queries and their five nearest matches in the joint space." src="figures/retrieval_examples.jpg" /></p>
+<p><em>Held-out queries and their five nearest matches in the joint space.</em></p>
+<p><img alt="Observed and predicted values of the best-predicted target features on one held-out group (z-scores within the group)." src="figures/prediction_maps.png" /></p>
+<p><em>Observed and predicted values of the best-predicted target features on one held-out group (z-scores within the group).</em></p>
+<p><img alt="k-means clusters of held-out joint embeddings and their label composition." src="figures/cluster_map.png" /></p>
+<p><em>k-means clusters of held-out joint embeddings and their label composition.</em></p>
+<p><img alt="Held-out joint embeddings of both modalities." src="figures/embedding_map.png" /></p>
+<p><em>Held-out joint embeddings of both modalities.</em></p>
+<p><img alt="Validation score and training loss by epoch." src="figures/training_curves.png" /></p>
+<p><em>Validation score and training loss by epoch.</em></p>
+<p>Best-predicted target features (hard_infonce:head):</p>
+<table>
+<thead>
+<tr>
+<th>feature</th>
+<th>test r</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PTMS</td>
+<td>0.726</td>
+</tr>
+<tr>
+<td>PCSK7</td>
+<td>0.660</td>
+</tr>
+<tr>
+<td>AP000769.1</td>
+<td>0.660</td>
+</tr>
+<tr>
+<td>KRT19</td>
+<td>0.633</td>
+</tr>
+<tr>
+<td>COL3A1</td>
+<td>0.626</td>
+</tr>
+<tr>
+<td>MMP14</td>
+<td>0.616</td>
+</tr>
+</tbody>
+</table>
+<h2>Critic review</h2>
+<p><strong>Triggers.</strong> The critic reviewed validation results only and raised five informational triggers:
+- no clear gain over ridge for prediction (−0.002, better in 2/4 folds);
+- no clear gain over unimodal clustering (+0.039, 2/4);
+- no clear gain over CCA clustering (+0.032, 3/4);
+- two comparisons scoring higher on recall@10: hard_infonce (0.040 vs 0.034) and patch_context_2x (0.036 vs 0.034), both flagged automatically as "within noise".</p>
+<p><strong>Assessment.</strong> The critic judged that the primary works but scores low: validation recall@10 was 0.0335, about 6× its validation chance of about 0.0054. It argued against the "within noise" flag for hard InfoNCE. Hard InfoNCE beat the soft-target primary in every fold (+0.0043, +0.0041, +0.0084, +0.0101; mean +0.0067), and a paired t over the four folds was about 4.5. The critic called this small but consistent evidence against the soft-target choice. It also noted two things:
+- best-epoch selection on validation makes all scores slightly optimistic, equally for both configurations;
+- hard InfoNCE overfits faster, with best epochs between 3 and 10 overall.</p>
+<p><strong>Revision.</strong> The critic promoted <code>hard_infonce</code> to primary at no extra compute cost. The switch was <strong>kept</strong>: validation recall@10 rose from 0.0335 to 0.0403 (+0.0068, better in 4/4 folds).</p>
+<p><strong>Test outcome.</strong> On the test data, scored once after the critic, the ranking held: hard_infonce 0.025, patch_context_2x 0.021, soft InfoNCE 0.020. The soft-target rationale (23.2% near-twins) did not pay off here.</p>
+<table>
+<thead>
+<tr>
+<th>trigger</th>
+<th>severity</th>
+<th>finding</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>no_clear_gain_over_ridge</td>
+<td>info</td>
+<td>No clear difference between the primary configuration and ridge on prediction_mean_pearson_top50 (mean difference -0.002; primary better in 2/4 folds).</td>
+</tr>
+<tr>
+<td>no_clear_gain_over_unimodal</td>
+<td>info</td>
+<td>No clear difference between the primary configuration and unimodal on clustering_ari (mean difference +0.039; primary better in 2/4 folds).</td>
+</tr>
+<tr>
+<td>no_clear_gain_over_cca</td>
+<td>info</td>
+<td>No clear difference between the primary configuration and cca on clustering_ari (mean difference +0.032; primary better in 3/4 folds).</td>
+</tr>
+<tr>
+<td>comparison_better</td>
+<td>info</td>
+<td>Comparison 'hard_infonce' scores higher than the primary on retrieval_mean_recall_at_10 (0.040 vs 0.034); within noise.</td>
+</tr>
+<tr>
+<td>comparison_better</td>
+<td>info</td>
+<td>Comparison 'patch_context_2x' scores higher than the primary on retrieval_mean_recall_at_10 (0.036 vs 0.034); within noise.</td>
+</tr>
+</tbody>
+</table>
+<h2>Limitations</h2>
+<ul>
+<li><strong>Low absolute retrieval.</strong> Recall@10 is 0.025 and the median rank is 577.5. Exact spot-level matching across patients is weak, even though it is well above chance (0.003) and CCA.</li>
+<li><strong>Batch confounding (warning flag).</strong> Held-out embeddings group by patient (silhouette 0.40) far more than by tissue label (0.09). Colour normalisation was applied but no explicit batch correction, and patient explains 77% of the variance in expression.</li>
+<li><strong>Only 4 folds and 8 patients.</strong> Each estimate rests on 4 held-out patient pairs. SDs over 4 folds are crude uncertainty measures, and no bootstrap intervals were computed. Probe and ARI SDs of about 0.1 make most of those comparisons uninformative.</li>
+<li><strong>Validation patient reused.</strong> Patient D was the validation group in two folds. In 3 of 4 folds the validation patient is also tested in another fold, so model selection is not fully independent across folds.</li>
+<li><strong>Possible pretraining overlap.</strong> Phikon was pretrained on TCGA tiles, not on these spot patches, but corpus overlap cannot be excluded. There was no zero-shot baseline, so overlap would make all phikon-based results, including ridge, slightly optimistic.</li>
+<li><strong>Optimistic validation scores.</strong> Best-epoch selection made validation scores optimistic; test recall (0.025) is below validation (0.040). Training peaked early (epochs 3–10), which suggests limited signal for the trainable heads.</li>
+<li><strong>Post-hoc primary.</strong> The primary was switched after looking at validation results. Comparisons were not re-pre-registered, though the test data were scored only once.</li>
+<li><strong>Promising variant not selected.</strong> patch_context_2x had the best prediction (r 0.188) and the best probe and ARI means, but it was not the selected primary. Its advantage is not formally tested and should not be claimed from these test results.</li>
+<li><strong>Fixed hyperparameters.</strong> Only one embedding size, learning rate and set of loss weights was tried, there was no fine-tuning, and each fit was capped at 180 s.</li>
+<li><strong>Small, imbalanced labelled set.</strong> Labels cover only 23% of spots with an imbalance ratio of 18.124, which limits probe and clustering evaluation. Retrieval examples in fold 1 show 0 same-label hits in the top 5 for most queries.</li>
+</ul>
+<h2>Number check</h2>
+<p>All 178 numbers in the prose above were found in the computed outputs.</p>
+<h2>Reproducibility</h2>
+<ul>
+<li>Command: <code>mmagent run --data data/stimage_her2 --objective 'Learn joint embeddings of tissue image patches and spot-level gene expression to enable cross-modal retrieval and prediction of gene expression from histology.' --out outputs/generated_report_1</code></li>
+<li>Seed 774; device mps (Apple GPU (MPS) on arm64); projection heads on cpu.</li>
+<li>LLM: claude-opus-5-5 via the Claude CLI, 3 call(s), $0.55; prompts and replies in <code>llm_transcript.json</code>; <code>--replay outputs/generated_report_1</code> repeats them without calling a model.</li>
+<li>Embeddings: <code>embeddings/held_out_embeddings.npz</code> (4,882 held-out rows, subsampled, float16).</li>
+<li>Files: decision_log.json, plan.json/plan.md, profile.json, screening.json, evaluation.json, tables/, figures/, downstream/, methods_summary.md, model_summary.json, run_manifest.json.</li>
+</ul>
+<h2>Appendix: training summaries</h2>
+<table>
+<thead>
+<tr>
+<th>configuration</th>
+<th>fold</th>
+<th>best epoch</th>
+<th>epochs</th>
+<th>stopped because</th>
+<th>best val score</th>
+<th>trainable params</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>primary</td>
+<td>fold1</td>
+<td>10</td>
+<td>25</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.048</td>
+<td>1,868,753</td>
+</tr>
+<tr>
+<td>primary</td>
+<td>fold2</td>
+<td>4</td>
+<td>19</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.017</td>
+<td>1,868,753</td>
+</tr>
+<tr>
+<td>primary</td>
+<td>fold3</td>
+<td>3</td>
+<td>18</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.031</td>
+<td>1,868,753</td>
+</tr>
+<tr>
+<td>primary</td>
+<td>fold4</td>
+<td>7</td>
+<td>22</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.040</td>
+<td>1,868,753</td>
+</tr>
+<tr>
+<td>hard_infonce</td>
+<td>fold1</td>
+<td>5</td>
+<td>20</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.052</td>
+<td>1,868,753</td>
+</tr>
+<tr>
+<td>hard_infonce</td>
+<td>fold2</td>
+<td>4</td>
+<td>19</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.020</td>
+<td>1,868,753</td>
+</tr>
+<tr>
+<td>hard_infonce</td>
+<td>fold3</td>
+<td>3</td>
+<td>18</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.039</td>
+<td>1,868,753</td>
+</tr>
+<tr>
+<td>hard_infonce</td>
+<td>fold4</td>
+<td>8</td>
+<td>23</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.050</td>
+<td>1,868,753</td>
+</tr>
+<tr>
+<td>patch_context_2x</td>
+<td>fold1</td>
+<td>8</td>
+<td>23</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.050</td>
+<td>1,868,753</td>
+</tr>
+<tr>
+<td>patch_context_2x</td>
+<td>fold2</td>
+<td>3</td>
+<td>18</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.018</td>
+<td>1,868,753</td>
+</tr>
+<tr>
+<td>patch_context_2x</td>
+<td>fold3</td>
+<td>3</td>
+<td>18</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.035</td>
+<td>1,868,753</td>
+</tr>
+<tr>
+<td>patch_context_2x</td>
+<td>fold4</td>
+<td>7</td>
+<td>22</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.042</td>
+<td>1,868,753</td>
+</tr>
+</tbody>
+</table>
+</main></body></html>

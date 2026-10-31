@@ -110,19 +110,24 @@ def _fit_cap(cfg: ConfigSpec, budget: Budget) -> float:
 
 def _longer(cfg: ConfigSpec, records: list[dict], budget: Budget, n_folds: int,
             remaining: float | None) -> list[Change]:
+    """More training where the cap that stopped it can still be raised; otherwise larger steps.
+    Uses planned caps only (never measured times), so the same run always gets the same advice."""
     t = cfg.training
     room = _fit_cap(cfg, budget) if remaining is None else min(_fit_cap(cfg, budget), remaining / max(1, n_folds))
-    if _capped_by(records) == "epochs" and t.max_epochs < budget.max_epochs:
-        per_epoch = np.median([r["seconds"] / max(1, r["epochs_run"]) for r in records if r.get("seconds")]
-                              or [0.0])
+    lr_up = [Change(path="training.lr", value=float(min(V.RANGES[("training", "lr")][1], 2 * t.lr)))]
+    if _capped_by(records) == "epochs":
+        if t.max_epochs >= budget.max_epochs:
+            return lr_up                                   # no more epochs allowed: take larger steps
         epochs = min(budget.max_epochs, 2 * t.max_epochs)
-        if per_epoch * epochs <= room:
-            return [Change(path="training.max_epochs", value=int(epochs)),
-                    Change(path="training.train_seconds", value=float(round(max(t.train_seconds, per_epoch * epochs * 1.2))))]
-    secs = min(room, 2 * t.train_seconds)
+        changes = [Change(path="training.max_epochs", value=int(epochs))]
+        secs = min(room, t.train_seconds * epochs / t.max_epochs)
+        if secs > t.train_seconds:
+            changes.append(Change(path="training.train_seconds", value=float(round(secs))))
+        return changes
+    secs = min(room, 2 * t.train_seconds)                  # stopped on the time cap
     if secs >= 1.2 * t.train_seconds:
         return [Change(path="training.train_seconds", value=float(round(secs)))]
-    return [Change(path="training.lr", value=float(min(V.RANGES[("training", "lr")][1], 2 * t.lr)))]
+    return lr_up
 
 
 def _against(cfg: ConfigSpec, plan: Plan, alt: str, underfit: bool, records, budget, n_folds,

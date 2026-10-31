@@ -1,0 +1,190 @@
+{
+ "command": "mmagent run --data data/stimage_her2 --objective 'Learn joint embeddings of tissue image patches and spot-level gene expression to enable cross-modal retrieval and prediction of gene expression from histology.' --out outputs/generated_report_1",
+ "data": "data/stimage_her2",
+ "objective": "Learn joint embeddings of tissue image patches and spot-level gene expression to enable cross-modal retrieval and prediction of gene expression from histology.",
+ "out_dir": "outputs/generated_report_1",
+ "finished": "2026-10-31T15:46:50+00:00",
+ "config": {
+  "seed": 774,
+  "device": "auto",
+  "heads_device": "cpu",
+  "quick": false,
+  "replay": null,
+  "runs_dir": "runs",
+  "cache_dir": "runs/cache",
+  "label_column": null,
+  "group_column": null,
+  "max_critic_revisions": 1,
+  "full": {
+   "train_seconds_per_fit": 180.0,
+   "finetune_seconds_per_fit": 1200.0,
+   "total_train_seconds": 2700.0,
+   "max_epochs": 300,
+   "max_folds": 4,
+   "max_samples": null,
+   "screening_train": 2000,
+   "screening_val": 500,
+   "max_candidates": 4,
+   "eval_max_samples": 5000,
+   "feature_batch_size": 64,
+   "device": "mps"
+  },
+  "quick_budget": {
+   "train_seconds_per_fit": 30.0,
+   "finetune_seconds_per_fit": 60.0,
+   "total_train_seconds": 240.0,
+   "max_epochs": 5,
+   "max_folds": 1,
+   "max_samples": 1000,
+   "screening_train": 300,
+   "screening_val": 100,
+   "max_candidates": 2,
+   "eval_max_samples": 1000,
+   "feature_batch_size": 32,
+   "device": "mps"
+  },
+  "llm": {
+   "enabled": true,
+   "model": "claude-opus-5-5",
+   "max_output_tokens": 16000,
+   "effort": {
+    "planner": "high",
+    "critic": "high",
+    "writer": "medium"
+   },
+   "max_budget_usd": 3.0,
+   "structured_output": true,
+   "timeout_seconds": 600.0,
+   "max_retries": 2
+  }
+ },
+ "hardware": {
+  "device": "mps",
+  "device_name": "Apple GPU (MPS) on arm64",
+  "cpu": "arm",
+  "n_cpu": 10,
+  "memory_gb": 17.2,
+  "disk_free_gb": 38.3,
+  "torch_version": "2.15.0"
+ },
+ "heads_device": "cpu",
+ "python": "3.12.14",
+ "versions": {
+  "torch": "2.15.0",
+  "torchvision": "0.29.2",
+  "transformers": "5.22.1",
+  "open-clip-torch": "3.3.0",
+  "timm": "1.0.30",
+  "scikit-learn": "1.9.1",
+  "numpy": "2.5.4",
+  "scipy": "1.18.1",
+  "pandas": "3.1.0",
+  "anndata": "0.13.4",
+  "scanpy": "1.12.5",
+  "umap-learn": "0.5.12",
+  "pydantic": "2.14.2",
+  "claude-agent-sdk": "0.2.176"
+ },
+ "git": {
+  "commit": "640746295b0d649642df89cd3515e38c3dd73b92",
+  "uncommitted_changes": true
+ },
+ "timings_seconds": {
+  "load and profile": 11.1,
+  "plan (screening + planner)": 46.9,
+  "training": 126.0,
+  "validation evaluation": 24.4,
+  "critic": 22.0,
+  "test evaluation": 33.4,
+  "downstream analyses": 0.0
+ },
+ "train_seconds": {
+  "planned_caps": 1800.0,
+  "measured": 75.7
+ },
+ "llm": {
+  "backend": "claude_cli",
+  "model_requested": "claude-opus-5-5",
+  "models_used": [
+   "claude-opus-5-5"
+  ],
+  "replay_from": null,
+  "n_calls": 3,
+  "n_from_cache": 0,
+  "total_cost_usd": 0.5472,
+  "max_budget_usd": 3.0,
+  "disabled": null,
+  "notes": []
+ },
+ "llm_calls": [
+  {
+   "role": "planner",
+   "cache_file": "planner_e42e6dd1fd95ff46.json",
+   "backend": "claude_cli",
+   "model_requested": "claude-opus-5-5",
+   "model_used": "claude-opus-5-5",
+   "seconds": 37.48676699999487,
+   "cost_usd": 0.09534939999999999,
+   "usage": {
+    "input_tokens": 2,
+    "output_tokens": 4572,
+    "cache_read_input_tokens": 19507,
+    "cache_creation_input_tokens": 0,
+    "stop_reason": "tool_use",
+    "models": [
+     "claude-opus-5-5"
+    ]
+   },
+   "structured": true,
+   "cached": false,
+   "note": "",
+   "response_chars": 9240
+  },
+  {
+   "role": "critic",
+   "cache_file": "critic_7c19d2f7052f9870.json",
+   "backend": "claude_cli",
+   "model_requested": "claude-opus-5-5",
+   "model_used": "claude-opus-5-5",
+   "seconds": 21.991808250022586,
+   "cost_usd": 0.1405864,
+   "usage": {
+    "input_tokens": 2,
+    "output_tokens": 2040,
+    "cache_read_input_tokens": 2052,
+    "cache_creation_input_tokens": 12421,
+    "stop_reason": "tool_use",
+    "models": [
+     "claude-opus-5-5"
+    ]
+   },
+   "structured": true,
+   "cached": false,
+   "note": "",
+   "response_chars": 2722
+  },
+  {
+   "role": "writer",
+   "cache_file": "writer_e3632f54dbbfbad4.json",
+   "backend": "claude_cli",
+   "model_requested": "claude-opus-5-5",
+   "model_used": "claude-opus-5-5",
+   "seconds": 60.81579449999845,
+   "cost_usd": 0.3112378,
+   "usage": {
+    "input_tokens": 2,
+    "output_tokens": 6921,
+    "cache_read_input_tokens": 1569,
+    "cache_creation_input_tokens": 21562,
+    "stop_reason": "tool_use",
+    "models": [
+     "claude-opus-5-5"
+    ]
+   },
+   "structured": true,
+   "cached": false,
+   "note": "",
+   "response_chars": 13154
+  }
+ ]
+}

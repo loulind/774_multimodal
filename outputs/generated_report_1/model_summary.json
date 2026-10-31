@@ -1,0 +1,233 @@
+{
+ "primary": {
+  "role": "primary",
+  "strategy": "contrastive_alignment",
+  "fusion": "joint",
+  "modalities": [
+   {
+    "modality": "image",
+    "encoder": "phikon",
+    "regime": "frozen",
+    "trainable_blocks": 0,
+    "encoder_dim": 768
+   },
+   {
+    "modality": "expression",
+    "encoder": "mlp",
+    "regime": "from_scratch",
+    "trainable_blocks": 0,
+    "encoder_dim": 0
+   }
+  ],
+  "losses": {
+   "soft_infonce": 1.0,
+   "cross_modal_regression": 1.0
+  },
+  "head": {
+   "embed_dim": 256,
+   "hidden_dim": 512,
+   "n_layers": 2,
+   "dropout": 0.1
+  },
+  "training": {
+   "batch_size": 512,
+   "lr": 0.001,
+   "weight_decay": 0.0001,
+   "max_epochs": 300,
+   "patience": 15,
+   "temperature_init": 0.07,
+   "learnable_temperature": true,
+   "soft_target_temperature": 0.1,
+   "finetune_lr": 1e-05,
+   "train_seconds": 180.0
+  },
+  "folds": [
+   {
+    "fold": "fold1",
+    "n_trainable_parameters": 1868753,
+    "best_epoch": 10,
+    "epochs_run": 25,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.0478
+   },
+   {
+    "fold": "fold2",
+    "n_trainable_parameters": 1868753,
+    "best_epoch": 4,
+    "epochs_run": 19,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.0168
+   },
+   {
+    "fold": "fold3",
+    "n_trainable_parameters": 1868753,
+    "best_epoch": 3,
+    "epochs_run": 18,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.0306
+   },
+   {
+    "fold": "fold4",
+    "n_trainable_parameters": 1868753,
+    "best_epoch": 7,
+    "epochs_run": 22,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.0398
+   }
+  ]
+ },
+ "hard_infonce": {
+  "role": "final",
+  "strategy": "contrastive_alignment",
+  "fusion": "joint",
+  "modalities": [
+   {
+    "modality": "image",
+    "encoder": "phikon",
+    "regime": "frozen",
+    "trainable_blocks": 0,
+    "encoder_dim": 768
+   },
+   {
+    "modality": "expression",
+    "encoder": "mlp",
+    "regime": "from_scratch",
+    "trainable_blocks": 0,
+    "encoder_dim": 0
+   }
+  ],
+  "losses": {
+   "infonce": 1.0,
+   "cross_modal_regression": 1.0
+  },
+  "head": {
+   "embed_dim": 256,
+   "hidden_dim": 512,
+   "n_layers": 2,
+   "dropout": 0.1
+  },
+  "training": {
+   "batch_size": 512,
+   "lr": 0.001,
+   "weight_decay": 0.0001,
+   "max_epochs": 300,
+   "patience": 15,
+   "temperature_init": 0.07,
+   "learnable_temperature": true,
+   "soft_target_temperature": 0.1,
+   "finetune_lr": 1e-05,
+   "train_seconds": 135.0
+  },
+  "folds": [
+   {
+    "fold": "fold1",
+    "n_trainable_parameters": 1868753,
+    "best_epoch": 5,
+    "epochs_run": 20,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.0521
+   },
+   {
+    "fold": "fold2",
+    "n_trainable_parameters": 1868753,
+    "best_epoch": 4,
+    "epochs_run": 19,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.0203
+   },
+   {
+    "fold": "fold3",
+    "n_trainable_parameters": 1868753,
+    "best_epoch": 3,
+    "epochs_run": 18,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.039
+   },
+   {
+    "fold": "fold4",
+    "n_trainable_parameters": 1868753,
+    "best_epoch": 8,
+    "epochs_run": 23,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.0499
+   }
+  ]
+ },
+ "patch_context_2x": {
+  "role": "comparison",
+  "strategy": "contrastive_alignment",
+  "fusion": "joint",
+  "modalities": [
+   {
+    "modality": "image",
+    "encoder": "phikon",
+    "regime": "frozen",
+    "trainable_blocks": 0,
+    "encoder_dim": 768
+   },
+   {
+    "modality": "expression",
+    "encoder": "mlp",
+    "regime": "from_scratch",
+    "trainable_blocks": 0,
+    "encoder_dim": 0
+   }
+  ],
+  "losses": {
+   "soft_infonce": 1.0,
+   "cross_modal_regression": 1.0
+  },
+  "head": {
+   "embed_dim": 256,
+   "hidden_dim": 512,
+   "n_layers": 2,
+   "dropout": 0.1
+  },
+  "training": {
+   "batch_size": 512,
+   "lr": 0.001,
+   "weight_decay": 0.0001,
+   "max_epochs": 300,
+   "patience": 15,
+   "temperature_init": 0.07,
+   "learnable_temperature": true,
+   "soft_target_temperature": 0.1,
+   "finetune_lr": 1e-05,
+   "train_seconds": 135.0
+  },
+  "folds": [
+   {
+    "fold": "fold1",
+    "n_trainable_parameters": 1868753,
+    "best_epoch": 8,
+    "epochs_run": 23,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.0495
+   },
+   {
+    "fold": "fold2",
+    "n_trainable_parameters": 1868753,
+    "best_epoch": 3,
+    "epochs_run": 18,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.018
+   },
+   {
+    "fold": "fold3",
+    "n_trainable_parameters": 1868753,
+    "best_epoch": 3,
+    "epochs_run": 18,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.0349
+   },
+   {
+    "fold": "fold4",
+    "n_trainable_parameters": 1868753,
+    "best_epoch": 7,
+    "epochs_run": 22,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.0423
+   }
+  ]
+ }
+}

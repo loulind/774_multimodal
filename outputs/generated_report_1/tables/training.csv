@@ -1,0 +1,13 @@
+configuration,fold,best_epoch,epochs_run,stopped_because,best_val_score,selection_metric,final_temperature,n_trainable_parameters,seconds
+primary,fold1,10,25,no validation improvement for 15 epochs,0.0478,retrieval,0.05163,1868753,8.3
+primary,fold2,4,19,no validation improvement for 15 epochs,0.0168,retrieval,0.0524,1868753,5.7
+primary,fold3,3,18,no validation improvement for 15 epochs,0.0306,retrieval,0.05523,1868753,5.7
+primary,fold4,7,22,no validation improvement for 15 epochs,0.0398,retrieval,0.05109,1868753,6.9
+hard_infonce,fold1,5,20,no validation improvement for 15 epochs,0.0521,retrieval,0.04822,1868753,6.2
+hard_infonce,fold2,4,19,no validation improvement for 15 epochs,0.0203,retrieval,0.0508,1868753,5.4
+hard_infonce,fold3,3,18,no validation improvement for 15 epochs,0.039,retrieval,0.0507,1868753,5.3
+hard_infonce,fold4,8,23,no validation improvement for 15 epochs,0.0499,retrieval,0.04662,1868753,6.7
+patch_context_2x,fold1,8,23,no validation improvement for 15 epochs,0.0495,retrieval,0.05281,1868753,7.6
+patch_context_2x,fold2,3,18,no validation improvement for 15 epochs,0.018,retrieval,0.05316,1868753,5.4
+patch_context_2x,fold3,3,18,no validation improvement for 15 epochs,0.0349,retrieval,0.05572,1868753,5.6
+patch_context_2x,fold4,7,22,no validation improvement for 15 epochs,0.0423,retrieval,0.05128,1868753,6.9

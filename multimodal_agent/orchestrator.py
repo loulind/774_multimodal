@@ -462,13 +462,15 @@ class Agent:
                 out["retrieval_examples"] = D.retrieval_examples(rec.emb["test"][a], rec.emb["test"][b], ds.ids[idx],
                                                                  labels, classes, 4, 5, self.cfg.seed)
             if "cross_modal_prediction" in plan.downstream and res["prediction"]:
-                own = {m: r for m, r in res["prediction"].items() if m.split(":")[0] == self.primary_name}
-                if own and rec.preds.get("test"):
-                    best = max(own, key=lambda m: own[m]["mean_r_top50"])
-                    out["prediction"] = {"method": best, "best_genes": own[best]["best_genes"]}
+                best = S.prediction_method(res["prediction"], self.primary_name)
+                if best and best in rec.preds.get("test", {}):
+                    out["prediction"] = {"method": best, "best_features": res["prediction"][best]["best_genes"]}
                     if xy is not None:
-                        out["prediction_maps"] = D.prediction_maps(rec.preds["test"][best], asm.test.target, groups, xy,
-                                                                   asm.target_features, asm.target_variance_order)
+                        maps = D.prediction_maps(rec.preds["test"][best], asm.test.target, groups, xy,
+                                                 asm.target_features, asm.target_variance_order)
+                        pred = plan.task.prediction
+                        maps.update(source=pred.source, target=pred.target, group_column=grp_col)
+                        out["prediction_maps"] = maps
             if "classification" in plan.downstream and classes:
                 view = next((m for m in self.pair if ds.modalities[m].kind == "image"), "fused")
                 pr = res["probe"].get(self.primary_name, {}).get(view)
@@ -478,7 +480,7 @@ class Agent:
                 z = l2n(l2n(rec.emb["test"][a]) + l2n(rec.emb["test"][b]))
                 cm = D.cluster_map(z, labels, classes, groups, xy if xy is not None else np.zeros((len(idx), 2)),
                                    seed=self.cfg.seed)
-                cm["spatial"] = xy is not None
+                cm.update(spatial=xy is not None, group_column=grp_col)
                 out["cluster_map"] = cm
         self.downstream_results = out
         self.downstream_index = d

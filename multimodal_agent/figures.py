@@ -275,13 +275,13 @@ def prediction_maps(maps: dict, path: Path) -> str | None:
     size = max(2.0, min(14.0, 9000 / max(1, len(x))))
     lim = 2.5
 
-    def z(v):                                   # within-slide z-score: the pattern the within-slide r scores
+    def z(v):                                   # within-group z-score: the pattern the within-group r scores
         v = np.asarray(v, float)
         return (v - v.mean()) / (v.std() or 1.0)
 
     for row, g in zip(axes, genes):
         for ax, v, title in ((row[0], z(g["observed"]), f"{g['gene']}: observed"),
-                             (row[1], z(g["predicted"]), f"predicted (within-slide r = {g['r_within']:.2f})")):
+                             (row[1], z(g["predicted"]), f"predicted (within-group r = {g['r_within']:.2f})")):
             sc = ax.scatter(x, y, c=v, s=size, cmap=cmap, vmin=-lim, vmax=lim, lw=0)
             ax.set_aspect("equal")
             ax.invert_yaxis()
@@ -290,9 +290,10 @@ def prediction_maps(maps: dict, path: Path) -> str | None:
         cb = fig.colorbar(sc, ax=list(row), shrink=0.8, pad=0.02)
         cb.outline.set_visible(False)
         cb.ax.tick_params(labelsize=7, color=AXIS, labelcolor=INK2)
-        cb.set_label("z-score within the slide", fontsize=7, color=INK2)
-    fig.suptitle(f"Expression predicted from histology, held-out slide {maps.get('group')} "
-                 f"({maps.get('n_spots')} spots)", x=0.02, ha="left", fontsize=9, fontweight="bold", color=INK)
+        cb.set_label("z-score within the group", fontsize=7, color=INK2)
+    fig.suptitle(f"{maps.get('target', 'target')} predicted from {maps.get('source', 'source')}: held-out "
+                 f"{maps.get('group_column') or 'group'} {maps.get('group')} ({maps.get('n_spots')} samples)",
+                 x=0.02, ha="left", fontsize=9, fontweight="bold", color=INK)
     return _save(fig, path)
 
 
@@ -347,6 +348,9 @@ def cluster_map(cm: dict, path: Path) -> str | None:
     if cont is not None:
         ax = fig.add_subplot(gs[:, 0])
         counts = np.asarray(cont["counts"])
+        present = counts.sum(0) > 0                     # label classes absent from this group are not drawn
+        counts = counts[:, present]
+        cont = {**cont, "classes": [c for c, keep in zip(cont["classes"], present) if keep]}
         frac = counts / np.maximum(1, counts.sum(1, keepdims=True))
         ax.imshow(frac, cmap=_cmap(BLUES, "blues"), vmin=0, vmax=1, aspect="auto")
         for i in range(frac.shape[0]):
@@ -372,7 +376,8 @@ def cluster_map(cm: dict, path: Path) -> str | None:
             ax.invert_yaxis()
             _bare(ax)
             ax.set_title(f"cluster {c} (n={int(sel.sum())})", fontsize=7.5)
-    fig.suptitle(f"k-means clusters (k={k}) of held-out joint embeddings, {cm.get('group')}", x=0.02, ha="left",
+    where = f"held-out {cm.get('group_column') or 'group'} {cm.get('group')}"
+    fig.suptitle(f"k-means clusters (k={k}) of held-out joint embeddings, {where}", x=0.02, ha="left",
                  fontsize=9, fontweight="bold", color=INK)
     fig.tight_layout()
     return _save(fig, path)
