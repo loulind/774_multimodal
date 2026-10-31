@@ -49,8 +49,11 @@ class FitResult:
                 "seconds": round(self.seconds, 1), "stopped_because": self.stopped_because,
                 "n_trainable_parameters": self.n_parameters,
                 "final_temperature": h["temperature"][-1] if h.get("temperature") else None,
-                "train_loss_at_best": h["train_loss"][self.best_epoch - 1] if h.get("train_loss") else None,
-                "val_loss_at_best": h["val_loss"][self.best_epoch - 1] if h.get("val_loss") else None}
+                "initial_val_score": h.get("initial_val_score"),
+                "train_loss_at_best": h["train_loss"][self.best_epoch - 1]
+                if h.get("train_loss") and self.best_epoch >= 1 else None,
+                "val_loss_at_best": h["val_loss"][self.best_epoch - 1]
+                if h.get("val_loss") and self.best_epoch >= 1 else None}
 
 
 def _to(data: FitData, device) -> dict:
@@ -147,7 +150,15 @@ def fit(cfg: ConfigSpec, train: FitData, val: FitData, *, selection: str, n_clas
     gen = torch.Generator().manual_seed(seed)
     hist = {"train_loss": [], "val_loss": [], "val_score": [], "temperature": [], "seconds": [],
             "terms": {x.name: [] for x in cfg.losses}}
+    # The untrained model is a candidate too (epoch 0): with identity-initialised heads it is the
+    # pretrained space, and training is kept only if it beats that on validation.
+    model.eval()
+    init = score(model, val, selection, pred_source)
+    hist["initial_val_score"] = round(init, 5) if np.isfinite(init) else None
     best, best_epoch, best_state, stale = -np.inf, 0, None, 0
+    if np.isfinite(init):
+        best = init
+        best_state = copy.deepcopy({k: v.detach().cpu() for k, v in model.state_dict().items()})
     start, why = time.perf_counter(), "epoch cap"
     for epoch in range(1, t.max_epochs + 1):
         model.train()

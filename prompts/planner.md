@@ -29,6 +29,8 @@ Deterministic Python code has already profiled the data and screened candidate e
 - A pre-aligned dual encoder (an image tower and a text tower trained together) allows a zero-shot baseline.
 - If a pretrained model's pretraining corpus may overlap the evaluation data, say so: its zero-shot scores are then optimistic.
 
+**Head initialisation.** When the two encoders form a pre-aligned dual encoder, residual heads (`head.residual`: the pretrained embedding plus a learned correction that starts at zero) begin training from the zero-shot solution. Randomly initialised heads discard that alignment and must relearn it from far fewer pairs.
+
 **Frozen or fine-tuned.**
 - Frozen backbones with small projection heads have far fewer trainable parameters and are the low-variance choice when pairs number in the thousands.
 - Partial fine-tuning of the last blocks needs many pairs, a GPU and enough time for several epochs within the per-fit budget.

@@ -184,6 +184,17 @@ def _check_config(c: ConfigSpec, plan: Plan, profile: DataProfile, budget: Budge
     # hyperparameters
     for (part, attr), (lo, hi) in RANGES.items():
         _clip(getattr(c, part), attr, lo, hi, c.name, repairs)
+    if c.head.residual:
+        infos = [REGISTRY.get(m.encoder) for m in c.modalities]
+        dims = {i.dim for i in infos if i is not None}
+        if any(i is None or i.trainable for i in infos) or len(dims) != 1:
+            c.head.residual = False
+            repairs.append(f"{c.name}: residual head needs pretrained encoders of one dimension; "
+                           "random initialisation used")
+        elif c.head.embed_dim != next(iter(dims)):
+            repairs.append(f"{c.name}: head embed_dim {c.head.embed_dim} -> {next(iter(dims))} "
+                           "(a residual head keeps the pretrained dimension)")
+            c.head.embed_dim = next(iter(dims))
     _clip(c.training, "max_epochs", 1, budget.max_epochs, c.name, repairs)
     finetunes = any(m.regime == "partial_finetune" for m in c.modalities)
     if finetunes:

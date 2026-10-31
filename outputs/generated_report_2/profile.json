@@ -1,0 +1,163 @@
+{
+ "name": "text",
+ "path": "data/rocov2/pairs.csv",
+ "format": "table",
+ "n_samples": 27000,
+ "modalities": [
+  {
+   "name": "image",
+   "kind": "image",
+   "n_present": 27000,
+   "missing_fraction": 0.0,
+   "source": "column 'image_path'",
+   "image": {
+    "source": "files",
+    "n_sampled": 240,
+    "width_median": 305.0,
+    "height_median": 256.0,
+    "width_range": [
+     119.0,
+     537.0
+    ],
+    "spot_diameter_px_median": null,
+    "grayscale_fraction": 0.7041666666666667,
+    "mean_rgb": [
+     83.2,
+     84.2,
+     84.4
+    ],
+    "saturation_mean": 0.06944258437980201,
+    "light_background_fraction": 0.06209299803287701,
+    "dark_background_fraction": 0.2909816044473307,
+    "stain_hue_fraction": 0.03354566658452133,
+    "sharpness_median": 1667.7791001403216,
+    "near_duplicate_fraction": 0.0,
+    "colour_between_group_share": null,
+    "domain_hint": "greyscale_imaging",
+    "domain_evidence": "70% of sampled images are greyscale; 3% of pixels with a stain hue"
+   },
+   "text": null,
+   "matrix": null,
+   "tabular": null,
+   "spatial": null
+  },
+  {
+   "name": "text",
+   "kind": "text",
+   "n_present": 26999,
+   "missing_fraction": 0.00003703703703705763,
+   "source": "column 'caption'",
+   "image": null,
+   "text": {
+    "n_sampled": 26999,
+    "words_median": 17.0,
+    "words_p95": 49.0,
+    "chars_median": 119.0,
+    "vocabulary_size": 17825,
+    "duplicate_fraction": 0.0050001851920441496,
+    "near_duplicate_fraction": 0.009963331975258343,
+    "fraction_over_60_words": 0.0255565020926701
+   },
+   "matrix": null,
+   "tabular": null,
+   "spatial": null
+  }
+ ],
+ "pairing": {
+  "present": {
+   "image": 27000,
+   "text": 26999
+  },
+  "pairs": {
+   "image|text": 26999
+  },
+  "n_all_present": 26999
+ },
+ "roles": [
+  {
+   "column": "image_path",
+   "role": "image_path",
+   "evidence": "values are paths to existing image files"
+  },
+  {
+   "column": "caption",
+   "role": "text",
+   "evidence": "free text: median 17 words, 100% distinct"
+  },
+  {
+   "column": "split",
+   "role": "split",
+   "evidence": "values ['test', 'train', 'valid'] are split names"
+  },
+  {
+   "column": "modality",
+   "role": "label",
+   "evidence": "6 classes; name suggests an outcome"
+  },
+  {
+   "column": "cuis",
+   "role": "multilabel",
+   "evidence": "90% of values hold several ';'-separated codes; 2.1% of codes are distinct"
+  },
+  {
+   "column": "concepts",
+   "role": "multilabel",
+   "evidence": "90% of values hold several ';'-separated codes; 2.1% of codes are distinct"
+  },
+  {
+   "column": "article",
+   "role": "group",
+   "evidence": "21341 levels; name suggests a dependence unit"
+  }
+ ],
+ "labels": [
+  {
+   "column": "modality",
+   "n_classes": 6,
+   "class_counts": {
+    "X-Ray Computed Tomography": 9387,
+    "Plain x-ray": 7449,
+    "Magnetic Resonance Imaging": 4275,
+    "Ultrasonography": 3882,
+    "angiogram": 1616,
+    "Positron-Emission Tomography": 147
+   },
+   "imbalance_ratio": 63.857142857142854,
+   "minority_class": "Positron-Emission Tomography",
+   "n_labelled": 26756,
+   "labelled_fraction": 0.9909629629629629,
+   "labelled_groups": 21164,
+   "n_groups": 21341
+  }
+ ],
+ "multilabel_columns": [
+  "cuis",
+  "concepts"
+ ],
+ "groups": [
+  {
+   "column": "article",
+   "role": "group",
+   "n_levels": 21341,
+   "size_min": 1,
+   "size_median": 1.0,
+   "size_max": 10,
+   "nested_in": null,
+   "split_overlap": {
+    "val_in_train": 0.0,
+    "test_in_train": 0.0,
+    "test_in_val": 0.187
+   }
+  }
+ ],
+ "cv_group": "article",
+ "split": {
+  "column": "split",
+  "counts": {
+   "train": 20000,
+   "val": 2000,
+   "test": 5000
+  }
+ },
+ "notes": []
+}

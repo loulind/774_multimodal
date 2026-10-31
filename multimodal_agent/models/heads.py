@@ -6,6 +6,11 @@ the same module: Linear -> LayerNorm -> GELU -> Dropout blocks, then a final
 Linear. LayerNorm keeps the scale of hidden units stable whatever the input
 features' scale, which matters when one side is a pretrained feature and the
 other a standardised gene-expression vector.
+
+Residual heads (``residual=True``, input and output of equal size) return the input
+plus a learned correction whose last layer starts at zero, so at initialisation the
+head is the identity. On a pre-aligned dual encoder this starts training from the
+pretrained (zero-shot) space instead of discarding it (the idea of CLIP-Adapter).
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ from torch import nn
 
 class MLP(nn.Module):
     def __init__(self, in_dim: int, out_dim: int, hidden: int = 512, n_layers: int = 2,
-                 dropout: float = 0.1):
+                 dropout: float = 0.1, residual: bool = False):
         super().__init__()
         layers: list[nn.Module] = []
         d = in_dim
@@ -25,9 +30,14 @@ class MLP(nn.Module):
             d = hidden
         layers.append(nn.Linear(d, out_dim))
         self.net = nn.Sequential(*layers)
+        self.residual = residual and in_dim == out_dim
+        if self.residual:                      # identity at initialisation
+            nn.init.zeros_(layers[-1].weight)
+            nn.init.zeros_(layers[-1].bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
+        y = self.net(x)
+        return x + y if self.residual else y
 
 
 def n_parameters(module: nn.Module, trainable_only: bool = True) -> int:

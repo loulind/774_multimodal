@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Multimodal representation learning report</title><style>
+:root { color-scheme: light; --bg: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e;
+  --muted: #898781; --rule: #e1e0d9; --accent: #2a78d6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d0d0d;
+  --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781; --rule: #2c2c2a; --accent: #3987e5; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7;
+  --muted: #898781; --rule: #2c2c2a; --accent: #3987e5; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  margin: 0; padding: 24px 16px; }
+main { max-width: 980px; margin: 0 auto; background: var(--surface); padding: 24px 28px; border-radius: 8px; }
+h1 { font-size: 1.6em; line-height: 1.25; } h2 { margin-top: 1.8em; border-bottom: 1px solid var(--rule);
+  padding-bottom: 4px; } h3 { margin-top: 1.4em; }
+a { color: var(--accent); } code { font-size: 0.92em; }
+table { border-collapse: collapse; font-size: 13px; margin: 10px 0 18px; display: block; overflow-x: auto; }
+th, td { border-bottom: 1px solid var(--rule); padding: 4px 10px; text-align: left; vertical-align: top;
+  font-variant-numeric: tabular-nums; } th { color: var(--ink2); font-weight: 600; }
+img { max-width: 100%; height: auto; background: #fcfcfb; border-radius: 6px; }
+.meta { color: var(--ink2); font-size: 13px; }
+@media (max-width: 640px) { body { padding: 0; } main { padding: 16px; border-radius: 0; } }
+</style></head><body><main>
+<h1>Multimodal representation learning report</h1>
+<p class="meta">Objective: “Learn a joint image–caption embedding for image–text retrieval and imaging-modality classification.”<br>Data: <code>data/rocov2</code> · generated 2026-10-31 17:30 UTC · plan: llm · prose: LLM (claude-opus-5-5)</p>
+
+<h2>Summary</h2>
+<p>The goal was a joint image–caption embedding for image–text retrieval (the primary task) and classification of imaging modality into 6 classes. The agent used the predefined split (20,000 train / 1,999 validation / 5,000 test), frozen BiomedCLIP image and text encoders, and residual 512-d projection heads trained with InfoNCE plus a supervised cross-entropy (CE) term at weight 0.5.</p>
+<p><strong>Training added nothing.</strong> Every trained configuration chose epoch 0, the identity starting point of the residual heads. So the "learned" model is the pretrained (zero-shot) BiomedCLIP space. This held for the primary model, the contrastive-only model, partial fine-tuning and the critic's lower-learning-rate revision.</p>
+<p><strong>Retrieval.</strong> On the held-out test set, mean R@10 was 0.7902 (bootstrap 95% interval 0.7795–0.8001), against a chance level of 0.002. This is +0.1517 over CCA (95% CI 0.141–0.162) and exactly equal to zero-shot (difference 0.000, CI 0.000 to 0.000).</p>
+<p><strong>Classification.</strong> A linear probe on the fused embedding reached macro-F1 0.938 (0.930–0.946), against a chance level of 0.167. That beats the image-only features by 0.017 (CI 0.005–0.033) but ties simple early fusion (difference 0.000, CI −0.003 to 0.004) and late fusion (difference −0.001, CI −0.004 to 0.002).</p>
+<p><strong>Bottom line:</strong> pretrained BiomedCLIP is a strong solution here. Fusing the two modalities helps classification compared with one modality alone. The training in this run did not improve on either. The absolute scores may also be inflated, because BiomedCLIP's pretraining data may overlap this dataset.</p>
+<h2>Data and objective</h2>
+<p><strong>Size and pairing.</strong> 27,000 samples; 26,999 have both an image and a caption, and the 1 incomplete sample was dropped from alignment. With about 19,999 training pairs, contrastive alignment is feasible, and a batch of 512 gives 511 negatives per positive.</p>
+<p><strong>Label.</strong> <code>modality</code> has 6 classes and is present on 99.1% of samples (26,756). It is strongly imbalanced (imbalance ratio 63.857):
+- X-Ray Computed Tomography: 9,387
+- Plain x-ray: 7,449
+- Positron-Emission Tomography (PET): 147</p>
+<p>Because of this, macro-F1 is the sensitive metric, and the agent cited it as the reason for adding the supervised CE term.</p>
+<p><strong>Images.</strong> 70% are greyscale (0.704), so luminance was copied to three channels to fit the pretrained encoders. There were no near-duplicate images (0.0).</p>
+<p><strong>Captions.</strong> Short: median 17 words, 95% have 49 words or fewer, and 2.6% exceed 60 words. Vocabulary is 17,825 distinct words, and about 1% of captions are near-duplicates (0.009963). This drove the choice of text truncation length.</p>
+<p><strong>Groups and split.</strong>
+- There are 21,341 <code>article</code> groups, and the data come with a predefined 20,000 / 2,000 / 5,000 split.
+- That split is <strong>not grouped by article</strong> ("Test groups: none (not grouped)").
+- 19% of test samples share an article with a validation sample, so choices made on validation may flatter test results slightly.
+- How many articles train and test share is not reported.</p>
+<p><strong>Domain.</strong> The captions are figure captions grouped by article. That is the same kind of material as BiomedCLIP's PMC-15M pretraining corpus, which raises a contamination concern.</p>
+<h2>What the agent decided and why</h2>
+<ul>
+<li><strong>Split:</strong> the predefined split was used so results are comparable with other work and the test set stays unseen. Models were selected on validation only, and the test set was scored once, after the critic. The cost: there is only one fold, so uncertainty comes from bootstrap intervals rather than spread across folds. The 19% validation–test article overlap was noted.</li>
+<li><strong>Strategy:</strong> CLIP-style contrastive alignment (InfoNCE). The objective needs a shared space, and there are about 19,999 training pairs.</li>
+<li><strong>Encoders:</strong> 4 image × 4 text candidates were screened on 2,000 training and 500 validation samples drawn from separate groups.</li>
+<li>BiomedCLIP image + text scored alignment R@10 0.966 (zero-shot; 0.917 with CCA).</li>
+<li>The next best pair, BiomedCLIP image + PubMedBERT, scored 0.599. DINOv2 + BiomedCLIP text scored 0.511.</li>
+<li>For images, BiomedCLIP's probe macro-F1 (0.934) led DINOv2 (0.914), CLIP-B/16 (0.915) and ResNet-50 (0.895 at best).</li>
+<li>The agent later warned that BiomedCLIP's advantage may be inflated by overlap with its pretraining data.</li>
+<li><strong>Preprocessing:</strong></li>
+<li>Greyscale images were copied to RGB.</li>
+<li>The text cap was raised by the LLM planner from 80 to 128 tokens. Biomedical words split into more subword tokens, and features are computed once, so the longer cap costs almost nothing.</li>
+<li><strong>Heads:</strong> residual 512-d heads that start as the identity, so training begins from the zero-shot solution and epoch 0 can itself be selected. The rule-based log said "embed 256"; the LLM corrected this to 512 to keep the pretrained dimension.</li>
+<li><strong>Training settings:</strong></li>
+<li>lr 0.001, batch 512, dropout 0.1.</li>
+<li>Temperature learned, starting from 0.07.</li>
+<li>Early stopping with patience 15, and a 180 s cap per fit.</li>
+<li><strong>Losses:</strong> InfoNCE (weight 1.0) plus CE on <code>modality</code> (weight 0.5), since the objective asks for classification. A <code>contrastive_only</code> comparison tests whether the CE term costs retrieval.</li>
+<li><strong>Regime:</strong> backbones frozen, which means few trainable parameters and low variance. Partial fine-tuning of the last 2 blocks was run as a comparison, with a 1,200 s budget and batch size raised from 64 to 128. The larger batch keeps the number of negatives from being confounded with fine-tuning.</li>
+<li><strong>Evaluation:</strong> the primary metric is mean R@10 for retrieval. Baselines: each modality alone, CCA, early fusion, late fusion, zero-shot and chance. The zero-shot baseline is kept but flagged as possibly optimistic.</li>
+</ul>
+<h3>Configurations trained</h3>
+<table>
+<thead>
+<tr>
+<th>configuration</th>
+<th>role</th>
+<th>strategy</th>
+<th>encoders</th>
+<th>regime</th>
+<th>losses</th>
+<th>dim</th>
+<th>lr</th>
+<th>cap (s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>primary</td>
+<td>primary</td>
+<td>contrastive_alignment</td>
+<td>image: biomedclip_image, text: biomedclip_text</td>
+<td>frozen, frozen</td>
+<td>infonce x 1.0, supervised_ce x 0.5</td>
+<td>512</td>
+<td>0.001</td>
+<td>180</td>
+</tr>
+<tr>
+<td>partial_finetune</td>
+<td>comparison</td>
+<td>contrastive_alignment</td>
+<td>image: biomedclip_image, text: biomedclip_text</td>
+<td>partial_finetune (last 2 blocks), partial_finetune (last 2 blocks)</td>
+<td>infonce x 1.0, supervised_ce x 0.5</td>
+<td>512</td>
+<td>0.001</td>
+<td>1,200</td>
+</tr>
+<tr>
+<td>contrastive_only</td>
+<td>comparison</td>
+<td>contrastive_alignment</td>
+<td>image: biomedclip_image, text: biomedclip_text</td>
+<td>frozen, frozen</td>
+<td>infonce x 1.0</td>
+<td>512</td>
+<td>0.001</td>
+<td>180</td>
+</tr>
+<tr>
+<td>primary_revised</td>
+<td>primary</td>
+<td>contrastive_alignment</td>
+<td>image: biomedclip_image, text: biomedclip_text</td>
+<td>frozen, frozen</td>
+<td>infonce x 1.0, supervised_ce x 0.5</td>
+<td>512</td>
+<td>3e-05</td>
+<td>180</td>
+</tr>
+</tbody>
+</table>
+<h3>Encoder screening (frozen features, training vs validation samples of fold 1)</h3>
+<table>
+<thead>
+<tr>
+<th>image</th>
+<th>text</th>
+<th>cca_recall_at_10</th>
+<th>zero_shot_recall_at_10</th>
+<th>alignment_recall_at_10</th>
+<th>probe_macro_f1</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>biomedclip_image</td>
+<td>biomedclip_text</td>
+<td>0.917</td>
+<td>0.966</td>
+<td>0.966</td>
+<td>0.934</td>
+</tr>
+<tr>
+<td>biomedclip_image</td>
+<td>pubmedbert</td>
+<td>0.599</td>
+<td>–</td>
+<td>0.599</td>
+<td>0.934</td>
+</tr>
+<tr>
+<td>biomedclip_image</td>
+<td>clip_b16_text</td>
+<td>0.595</td>
+<td>–</td>
+<td>0.595</td>
+<td>0.934</td>
+</tr>
+<tr>
+<td>biomedclip_image</td>
+<td>minilm</td>
+<td>0.550</td>
+<td>–</td>
+<td>0.550</td>
+<td>0.934</td>
+</tr>
+<tr>
+<td>dinov2_base</td>
+<td>biomedclip_text</td>
+<td>0.511</td>
+<td>–</td>
+<td>0.511</td>
+<td>0.914</td>
+</tr>
+<tr>
+<td>dinov2_base</td>
+<td>pubmedbert</td>
+<td>0.328</td>
+<td>–</td>
+<td>0.328</td>
+<td>0.914</td>
+</tr>
+<tr>
+<td>dinov2_base</td>
+<td>clip_b16_text</td>
+<td>0.298</td>
+<td>–</td>
+<td>0.298</td>
+<td>0.914</td>
+</tr>
+<tr>
+<td>dinov2_base</td>
+<td>minilm</td>
+<td>0.255</td>
+<td>–</td>
+<td>0.255</td>
+<td>0.914</td>
+</tr>
+<tr>
+<td>clip_b16_image</td>
+<td>biomedclip_text</td>
+<td>0.579</td>
+<td>–</td>
+<td>0.579</td>
+<td>0.915</td>
+</tr>
+<tr>
+<td>clip_b16_image</td>
+<td>pubmedbert</td>
+<td>0.379</td>
+<td>–</td>
+<td>0.379</td>
+<td>0.915</td>
+</tr>
+<tr>
+<td>clip_b16_image</td>
+<td>clip_b16_text</td>
+<td>0.377</td>
+<td>0.375</td>
+<td>0.377</td>
+<td>0.915</td>
+</tr>
+<tr>
+<td>clip_b16_image</td>
+<td>minilm</td>
+<td>0.291</td>
+<td>–</td>
+<td>0.291</td>
+<td>0.915</td>
+</tr>
+<tr>
+<td>resnet50</td>
+<td>biomedclip_text</td>
+<td>0.443</td>
+<td>–</td>
+<td>0.443</td>
+<td>0.895</td>
+</tr>
+<tr>
+<td>resnet50</td>
+<td>pubmedbert</td>
+<td>0.272</td>
+<td>–</td>
+<td>0.272</td>
+<td>0.727</td>
+</tr>
+<tr>
+<td>resnet50</td>
+<td>clip_b16_text</td>
+<td>0.250</td>
+<td>–</td>
+<td>0.250</td>
+<td>0.727</td>
+</tr>
+<tr>
+<td>resnet50</td>
+<td>minilm</td>
+<td>0.233</td>
+<td>–</td>
+<td>0.233</td>
+<td>0.727</td>
+</tr>
+</tbody>
+</table>
+<h2>Results on held-out test data</h2>
+<p><strong>Retrieval (test, 5,000 pairs)</strong>
+- <strong>Primary model (= zero-shot):</strong>
+  - Mean R@10 0.7902 (0.7795–0.8001), far above the chance level of 0.002.
+  - R@1 0.3827, R@5 0.6804, median rank 2.0.
+  - Both directions are similar: image→text 0.789, text→image 0.7914.
+  - On a standardised gallery of 1,000, R@10 is 0.941.
+- <strong>CCA:</strong> R@10 0.6385 (0.6255–0.6502), median rank 5.0, gallery-1,000 R@10 0.8564. The primary model beats CCA by 0.1517 (CI 0.141–0.162); the interval excludes zero.
+- <strong>Validation to test:</strong> validation R@10 was 0.871. Test is lower (0.7902), most likely partly because the test gallery is larger, which makes R@10 harder.
+- <strong>Label consistency:</strong> 0.939 of the top-10 neighbours share the query's modality, against a chance level of 0.262 (CCA: 0.821).</p>
+<p><strong>Classification (linear probe macro-F1; chance level 0.167)</strong>
+- Fused embedding: 0.938 (0.930–0.946).
+- Image view: 0.921 (0.904–0.935).
+- Text view: 0.893 (0.875–0.909).
+- The text view sits slightly below the unimodal text baseline (0.896), with heavily overlapping intervals.
+- Detailed results for the image view: balanced accuracy 0.972, macro-F1 0.921.
+  - Per-class F1 is high for Ultrasonography (0.999), CT (0.974), MRI (0.941), Plain x-ray (0.938) and even PET (0.936), despite PET having only 147 samples.
+  - Angiogram is the clear weak class (0.739).</p>
+<p><strong>Clustering (ARI; point estimates only, no intervals)</strong>
+- Test: fused 0.611, against text-only 0.555, image-only 0.503 and CCA fused 0.301.
+- Validation reverses part of this: primary 0.508 against the unimodal baseline's 0.512 (difference −0.004).
+- With no intervals and one fold, the test-set clustering advantage should be treated as unconfirmed.</p>
+<p><strong>Configurations compared</strong>
+- <code>primary</code>, <code>contrastive_only</code>, <code>primary_revised</code> and <code>zero_shot</code> produced identical test metrics.
+- <code>partial_finetune</code> differed only negligibly: R@1 0.3828 and fused probe 0.934.
+- So neither the CE term nor fine-tuning changed anything measurable. None of these comparisons tells us whether CE or fine-tuning <em>would</em> help if training had moved the heads away from the identity starting point.</p>
+<p><img alt="Test metrics for every configuration (blue: final configuration) and baseline (grey)." src="figures/comparison.png" /></p>
+<p><em>Test metrics for every configuration (blue: final configuration) and baseline (grey).</em></p>
+<h3>recall@10 (mean of both directions) (primary metric)</h3>
+<table>
+<thead>
+<tr>
+<th>representation</th>
+<th>kind</th>
+<th>mean</th>
+<th>lower</th>
+<th>upper</th>
+<th>interval</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>primary</td>
+<td>configuration</td>
+<td>0.790</td>
+<td>0.780</td>
+<td>0.800</td>
+<td>bootstrap 95% interval</td>
+</tr>
+<tr>
+<td>partial_finetune</td>
+<td>configuration</td>
+<td>0.790</td>
+<td>0.780</td>
+<td>0.800</td>
+<td>bootstrap 95% interval</td>
+</tr>
+<tr>
+<td>contrastive_only</td>
+<td>configuration</td>
+<td>0.790</td>
+<td>0.780</td>
+<td>0.800</td>
+<td>bootstrap 95% interval</td>
+</tr>
+<tr>
+<td>primary_revised</td>
+<td>configuration</td>
+<td>0.790</td>
+<td>0.780</td>
+<td>0.800</td>
+<td>bootstrap 95% interval</td>
+</tr>
+<tr>
+<td>zero_shot</td>
+<td>baseline</td>
+<td>0.790</td>
+<td>0.780</td>
+<td>0.800</td>
+<td>bootstrap 95% interval</td>
+</tr>
+<tr>
+<td>cca</td>
+<td>baseline</td>
+<td>0.639</td>
+<td>0.625</td>
+<td>0.650</td>
+<td>bootstrap 95% interval</td>
+</tr>
+</tbody>
+</table>
+<h3>Retrieval</h3>
+<table>
+<thead>
+<tr>
+<th>representation</th>
+<th>R@1</th>
+<th>R@5</th>
+<th>R@10</th>
+<th>image→text R@10</th>
+<th>text→image R@10</th>
+<th>median rank</th>
+<th>chance R@10</th>
+<th>label match@10</th>
+<th>label chance</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>primary</td>
+<td>0.383</td>
+<td>0.680</td>
+<td>0.790</td>
+<td>0.789</td>
+<td>0.791</td>
+<td>2.000</td>
+<td>0.002</td>
+<td>0.939</td>
+<td>0.262</td>
+</tr>
+<tr>
+<td>partial_finetune</td>
+<td>0.383</td>
+<td>0.680</td>
+<td>0.790</td>
+<td>0.789</td>
+<td>0.791</td>
+<td>2.000</td>
+<td>0.002</td>
+<td>0.939</td>
+<td>0.262</td>
+</tr>
+<tr>
+<td>contrastive_only</td>
+<td>0.383</td>
+<td>0.680</td>
+<td>0.790</td>
+<td>0.789</td>
+<td>0.791</td>
+<td>2.000</td>
+<td>0.002</td>
+<td>0.939</td>
+<td>0.262</td>
+</tr>
+<tr>
+<td>primary_revised</td>
+<td>0.383</td>
+<td>0.680</td>
+<td>0.790</td>
+<td>0.789</td>
+<td>0.791</td>
+<td>2.000</td>
+<td>0.002</td>
+<td>0.939</td>
+<td>0.262</td>
+</tr>
+<tr>
+<td>cca</td>
+<td>0.269</td>
+<td>0.519</td>
+<td>0.639</td>
+<td>0.634</td>
+<td>0.643</td>
+<td>5.000</td>
+<td>0.002</td>
+<td>0.821</td>
+<td>0.262</td>
+</tr>
+<tr>
+<td>zero_shot</td>
+<td>0.383</td>
+<td>0.680</td>
+<td>0.790</td>
+<td>0.789</td>
+<td>0.791</td>
+<td>2.000</td>
+<td>0.002</td>
+<td>0.939</td>
+<td>0.262</td>
+</tr>
+</tbody>
+</table>
+<h3>Classification and clustering</h3>
+<table>
+<thead>
+<tr>
+<th>representation</th>
+<th>view</th>
+<th>probe macro-F1</th>
+<th>balanced acc.</th>
+<th>kNN macro-F1</th>
+<th>ARI</th>
+<th>NMI</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>late_fusion</td>
+<td>average</td>
+<td>0.939</td>
+<td>0.975</td>
+<td>–</td>
+<td>–</td>
+<td>–</td>
+</tr>
+<tr>
+<td>primary</td>
+<td>fused</td>
+<td>0.938</td>
+<td>0.975</td>
+<td>0.950</td>
+<td>0.611</td>
+<td>0.760</td>
+</tr>
+<tr>
+<td>contrastive_only</td>
+<td>fused</td>
+<td>0.938</td>
+<td>0.975</td>
+<td>0.950</td>
+<td>0.611</td>
+<td>0.760</td>
+</tr>
+<tr>
+<td>primary_revised</td>
+<td>fused</td>
+<td>0.938</td>
+<td>0.975</td>
+<td>0.950</td>
+<td>0.611</td>
+<td>0.760</td>
+</tr>
+<tr>
+<td>zero_shot</td>
+<td>fused</td>
+<td>0.938</td>
+<td>0.975</td>
+<td>0.950</td>
+<td>0.611</td>
+<td>0.760</td>
+</tr>
+<tr>
+<td>early_fusion</td>
+<td>concat</td>
+<td>0.937</td>
+<td>0.974</td>
+<td>–</td>
+<td>–</td>
+<td>–</td>
+</tr>
+<tr>
+<td>partial_finetune</td>
+<td>fused</td>
+<td>0.934</td>
+<td>0.975</td>
+<td>0.950</td>
+<td>0.611</td>
+<td>0.760</td>
+</tr>
+<tr>
+<td>cca</td>
+<td>fused</td>
+<td>0.932</td>
+<td>0.972</td>
+<td>0.914</td>
+<td>0.301</td>
+<td>0.507</td>
+</tr>
+<tr>
+<td>cca</td>
+<td>image</td>
+<td>0.929</td>
+<td>0.973</td>
+<td>0.925</td>
+<td>0.173</td>
+<td>0.347</td>
+</tr>
+<tr>
+<td>primary</td>
+<td>image</td>
+<td>0.921</td>
+<td>0.972</td>
+<td>0.948</td>
+<td>0.503</td>
+<td>0.666</td>
+</tr>
+<tr>
+<td>contrastive_only</td>
+<td>image</td>
+<td>0.921</td>
+<td>0.972</td>
+<td>0.948</td>
+<td>0.503</td>
+<td>0.666</td>
+</tr>
+<tr>
+<td>primary_revised</td>
+<td>image</td>
+<td>0.921</td>
+<td>0.972</td>
+<td>0.948</td>
+<td>0.503</td>
+<td>0.666</td>
+</tr>
+<tr>
+<td>partial_finetune</td>
+<td>image</td>
+<td>0.921</td>
+<td>0.972</td>
+<td>0.948</td>
+<td>0.503</td>
+<td>0.666</td>
+</tr>
+<tr>
+<td>unimodal</td>
+<td>image</td>
+<td>0.921</td>
+<td>0.972</td>
+<td>0.948</td>
+<td>0.503</td>
+<td>0.666</td>
+</tr>
+<tr>
+<td>zero_shot</td>
+<td>image</td>
+<td>0.921</td>
+<td>0.972</td>
+<td>0.948</td>
+<td>0.503</td>
+<td>0.666</td>
+</tr>
+<tr>
+<td>cca</td>
+<td>text</td>
+<td>0.896</td>
+<td>0.950</td>
+<td>0.851</td>
+<td>0.138</td>
+<td>0.173</td>
+</tr>
+<tr>
+<td>unimodal</td>
+<td>text</td>
+<td>0.896</td>
+<td>0.950</td>
+<td>0.877</td>
+<td>0.555</td>
+<td>0.672</td>
+</tr>
+<tr>
+<td>zero_shot</td>
+<td>text</td>
+<td>0.896</td>
+<td>0.950</td>
+<td>0.877</td>
+<td>0.555</td>
+<td>0.672</td>
+</tr>
+<tr>
+<td>primary</td>
+<td>text</td>
+<td>0.893</td>
+<td>0.950</td>
+<td>0.877</td>
+<td>0.555</td>
+<td>0.672</td>
+</tr>
+<tr>
+<td>partial_finetune</td>
+<td>text</td>
+<td>0.893</td>
+<td>0.950</td>
+<td>0.877</td>
+<td>0.555</td>
+<td>0.672</td>
+</tr>
+<tr>
+<td>contrastive_only</td>
+<td>text</td>
+<td>0.893</td>
+<td>0.950</td>
+<td>0.877</td>
+<td>0.555</td>
+<td>0.672</td>
+</tr>
+<tr>
+<td>primary_revised</td>
+<td>text</td>
+<td>0.893</td>
+<td>0.950</td>
+<td>0.877</td>
+<td>0.555</td>
+<td>0.672</td>
+</tr>
+</tbody>
+</table>
+<h3>Embedding geometry</h3>
+<table>
+<thead>
+<tr>
+<th>representation</th>
+<th>alignment</th>
+<th>uniformity a</th>
+<th>uniformity b</th>
+<th>modality gap</th>
+<th>eff. rank a</th>
+<th>eff. rank b</th>
+<th>group silhouette</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>primary</td>
+<td>1.093</td>
+<td>-2.259</td>
+<td>-1.868</td>
+<td>0.797</td>
+<td>103.315</td>
+<td>102.089</td>
+<td>–</td>
+</tr>
+<tr>
+<td>partial_finetune</td>
+<td>1.093</td>
+<td>-2.259</td>
+<td>-1.868</td>
+<td>0.797</td>
+<td>103.306</td>
+<td>102.068</td>
+<td>–</td>
+</tr>
+<tr>
+<td>contrastive_only</td>
+<td>1.093</td>
+<td>-2.259</td>
+<td>-1.868</td>
+<td>0.797</td>
+<td>103.315</td>
+<td>102.089</td>
+<td>–</td>
+</tr>
+<tr>
+<td>primary_revised</td>
+<td>1.093</td>
+<td>-2.259</td>
+<td>-1.868</td>
+<td>0.797</td>
+<td>103.315</td>
+<td>102.089</td>
+<td>–</td>
+</tr>
+<tr>
+<td>cca</td>
+<td>0.937</td>
+<td>-3.829</td>
+<td>-3.837</td>
+<td>0.030</td>
+<td>63.539</td>
+<td>63.714</td>
+<td>–</td>
+</tr>
+<tr>
+<td>zero_shot</td>
+<td>1.093</td>
+<td>-2.259</td>
+<td>-1.868</td>
+<td>0.797</td>
+<td>103.315</td>
+<td>102.089</td>
+<td>–</td>
+</tr>
+</tbody>
+</table>
+<h2>Did integration help?</h2>
+<p><strong>Two modalities against one: yes, for classification.</strong>
+- Fused macro-F1 0.938 against image-only 0.921: difference +0.017, CI 0.005–0.033, which excludes zero.
+- Text-only is lower still (0.896).
+- Test clustering ARI also favours fusion (0.611 against 0.555; difference 0.056), but there is no interval and validation showed no gain (−0.004).</p>
+<p><strong>Against linear alignment (CCA): yes, clearly.</strong>
+- Retrieval R@10 +0.1517 (CI 0.141–0.162).
+- Probe macro-F1 +0.005 (CI 0.002–0.008): small but excludes zero.
+- ARI 0.611 against 0.301.
+- Caveat: CCA was fit on the BiomedCLIP features, so this gap reflects the pretrained contrastive alignment against a linear re-alignment of the same features.</p>
+<p><strong>Against simple fusion of unimodal features: tie.</strong>
+- Early fusion (concatenation): difference +0.000 (CI −0.003 to 0.004).
+- Late fusion (averaging): difference −0.001 (CI −0.004 to 0.002).
+- Both intervals include zero.</p>
+<p><strong>Against zero-shot BiomedCLIP: identical.</strong> Differences were exactly 0.000 on retrieval, probe and ARI.</p>
+<p><strong>Interpretation.</strong> The benefit comes from combining the image and caption information that the pretrained BiomedCLIP encoders already extract. Plain concatenation or averaging captures it just as well. The joint heads trained in this run added nothing, because the selected checkpoint is the untrained identity. Tying simpler methods is the finding.</p>
+<table>
+<thead>
+<tr>
+<th>metric</th>
+<th>versus</th>
+<th>final config</th>
+<th>alternative</th>
+<th>difference</th>
+<th>SD</th>
+<th>95% interval</th>
+<th>folds better</th>
+<th>folds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>retrieval_mean_recall_at_10</td>
+<td>cca</td>
+<td>0.790</td>
+<td>0.638</td>
+<td>0.152</td>
+<td>–</td>
+<td>0.141 to 0.162</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>retrieval_mean_recall_at_10</td>
+<td>zero_shot</td>
+<td>0.790</td>
+<td>0.790</td>
+<td>0.000</td>
+<td>–</td>
+<td>0.000 to 0.000</td>
+<td>0</td>
+<td>1</td>
+</tr>
+<tr>
+<td>probe_macro_f1</td>
+<td>unimodal</td>
+<td>0.938</td>
+<td>0.921</td>
+<td>0.017</td>
+<td>–</td>
+<td>0.005 to 0.033</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>probe_macro_f1</td>
+<td>early_fusion</td>
+<td>0.938</td>
+<td>0.937</td>
+<td>0.000</td>
+<td>–</td>
+<td>-0.003 to 0.004</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>probe_macro_f1</td>
+<td>late_fusion</td>
+<td>0.938</td>
+<td>0.939</td>
+<td>-0.001</td>
+<td>–</td>
+<td>-0.004 to 0.002</td>
+<td>0</td>
+<td>1</td>
+</tr>
+<tr>
+<td>probe_macro_f1</td>
+<td>cca</td>
+<td>0.938</td>
+<td>0.932</td>
+<td>0.005</td>
+<td>–</td>
+<td>0.002 to 0.008</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>probe_macro_f1</td>
+<td>zero_shot</td>
+<td>0.938</td>
+<td>0.938</td>
+<td>0.000</td>
+<td>–</td>
+<td>0.000 to 0.000</td>
+<td>0</td>
+<td>1</td>
+</tr>
+<tr>
+<td>clustering_ari</td>
+<td>unimodal</td>
+<td>0.611</td>
+<td>0.555</td>
+<td>0.056</td>
+<td>–</td>
+<td>–</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>clustering_ari</td>
+<td>cca</td>
+<td>0.611</td>
+<td>0.301</td>
+<td>0.310</td>
+<td>–</td>
+<td>–</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>clustering_ari</td>
+<td>zero_shot</td>
+<td>0.611</td>
+<td>0.611</td>
+<td>0.000</td>
+<td>–</td>
+<td>–</td>
+<td>0</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+<h2>Downstream analyses</h2>
+<p><img alt="Held-out queries and their five nearest matches in the joint space." src="figures/retrieval_examples.jpg" /></p>
+<p><em>Held-out queries and their five nearest matches in the joint space.</em></p>
+<p><img alt="Confusion matrix of the linear probe (rows: true class)." src="figures/confusion.png" /></p>
+<p><em>Confusion matrix of the linear probe (rows: true class).</em></p>
+<p><img alt="Held-out joint embeddings of both modalities." src="figures/embedding_map.png" /></p>
+<p><em>Held-out joint embeddings of both modalities.</em></p>
+<p><img alt="Validation score and training loss by epoch." src="figures/training_curves.png" /></p>
+<p><em>Validation score and training loss by epoch.</em></p>
+<h2>Critic review</h2>
+<p><strong>Triggers.</strong> Three informational flags fired on validation:
+- no gain over zero-shot on R@10 (difference +0.000, CI 0.000 to 0.000);
+- no gain over the unimodal baseline on ARI (−0.004);
+- no gain over zero-shot on ARI (+0.000).</p>
+<p><strong>Assessment.</strong> Retrieval is strong in absolute terms (validation R@10 0.871 against a chance level of 0.005, and +0.111 over CCA with CI 0.098–0.124). However, every configuration selected epoch 0, so "training contributed nothing."</p>
+<p><strong>Diagnosis.</strong> Training was moving the heads too far, too fast:
+- Validation R@10 fell right after the first epoch (0.871 → 0.856 → 0.830) while training loss fell steadily (2.34 → 0.60).
+- The same happened in <code>contrastive_only</code>, so the CE term was not the cause.
+- Partial fine-tuning also degraded (0.853 after one epoch).
+- The critic attributed this to lr 1e-3 pushing the heads away from an already well-aligned space, on data likely close to BiomedCLIP's PMC pretraining distribution.</p>
+<p><strong>Revision.</strong> It ran with lr 3e-05 and weight decay 0.01. It again chose epoch 0: validation R@10 0.8707 revised against 0.8707 original (difference +0.0000). It was <strong>discarded</strong>, and the original (zero-shot-equivalent) result stands. Test data were scored only after this decision.</p>
+<table>
+<thead>
+<tr>
+<th>trigger</th>
+<th>severity</th>
+<th>finding</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>no_clear_gain_over_zero_shot</td>
+<td>info</td>
+<td>No clear difference between the primary configuration and zero_shot on retrieval_mean_recall_at_10 (difference +0.000, 95% CI +0.000 to +0.000).</td>
+</tr>
+<tr>
+<td>no_clear_gain_over_unimodal</td>
+<td>info</td>
+<td>No clear difference between the primary configuration and unimodal on clustering_ari (mean difference -0.004; primary better in 0/1 folds).</td>
+</tr>
+<tr>
+<td>no_clear_gain_over_zero_shot</td>
+<td>info</td>
+<td>No clear difference between the primary configuration and zero_shot on clustering_ari (mean difference +0.000; primary better in 0/1 folds).</td>
+</tr>
+</tbody>
+</table>
+<h2>Limitations</h2>
+<ul>
+<li><strong>Possible pretraining contamination.</strong> BiomedCLIP was pretrained on PMC-15M figure–caption pairs, and this dataset is figure captions grouped by article. Overlap would inflate the zero-shot/primary scores (screening 0.966, test 0.7902) and the margin over non-BiomedCLIP encoders and CCA. The run cannot rule this out.</li>
+<li><strong>No learned contribution.</strong> All configurations selected epoch 0, including at lr 3e-05. The run therefore evaluates pretrained BiomedCLIP, not a trained joint model. Whether a smaller intervention, such as tuning only the temperature or using even lower learning rates, could help remains untested.</li>
+<li><strong>The CE term and fine-tuning are uninformative.</strong> Because every model sits at the identity, the comparisons with <code>contrastive_only</code> and <code>partial_finetune</code> cannot answer their intended questions. Partial fine-tuning also ran only 2 epochs.</li>
+<li><strong>Single fold.</strong> There is only one predefined split. Uncertainty comes from bootstrap intervals over test samples, not across folds. Clustering ARI has no interval at all.</li>
+<li><strong>Split not grouped by article.</strong> 19% of test samples share an article with a validation sample. Train–test article overlap is not reported. Both could make held-out estimates optimistic.</li>
+<li><strong>Clustering is inconsistent.</strong> The fused ARI advantage on test (0.611 against 0.555) was not seen on validation (0.508 against 0.512).</li>
+<li><strong>Gallery size.</strong> R@10 depends on gallery size: chance is 0.002 on test and 0.005 on validation. Compare across studies using the gallery-1,000 figure (0.941) or with matched galleries.</li>
+<li><strong>Weak class and small class.</strong> Angiogram F1 is only 0.739. PET has 147 samples in total, so its per-class F1 (0.936) rests on few test cases.</li>
+<li><strong>Screening sample.</strong> Encoders were chosen on a 2,000/500 subsample. That was adequate here given the large margin, but it is still a small sample.</li>
+</ul>
+<h2>Number check</h2>
+<p>1 of 198 numbers in the prose were <strong>not found</strong> in the computed outputs; treat them with caution:</p>
+<ul>
+<li>50 (decisions_explained): ...F1 (0.934) led DINOv2 (0.914), CLIP-B/16 (0.915) and ResNet-50 (0.895 at best).   - The agen...</li>
+</ul>
+<h2>Reproducibility</h2>
+<ul>
+<li>Command: <code>mmagent run --data data/rocov2 --objective 'Learn a joint image–caption embedding for image–text retrieval and imaging-modality classification.' --out outputs/generated_report_2</code></li>
+<li>Seed 774; device mps (Apple GPU (MPS) on arm64); projection heads on cpu.</li>
+<li>LLM: claude-opus-5-5 via the Claude CLI, 3 call(s), $0.71; prompts and replies in <code>llm_transcript.json</code>; <code>--replay outputs/generated_report_2</code> repeats them without calling a model.</li>
+<li>Embeddings: <code>embeddings/held_out_embeddings.npz</code> (2,441 held-out rows, subsampled, float16).</li>
+<li>Files: decision_log.json, plan.json/plan.md, profile.json, screening.json, evaluation.json, tables/, figures/, downstream/, methods_summary.md, model_summary.json, run_manifest.json.</li>
+</ul>
+<h2>Appendix: training summaries</h2>
+<table>
+<thead>
+<tr>
+<th>configuration</th>
+<th>fold</th>
+<th>best epoch</th>
+<th>epochs</th>
+<th>stopped because</th>
+<th>best val score</th>
+<th>trainable params</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>primary</td>
+<td>predefined</td>
+<td>0</td>
+<td>15</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.871</td>
+<td>1,055,751</td>
+</tr>
+<tr>
+<td>partial_finetune</td>
+<td>predefined</td>
+<td>0</td>
+<td>2</td>
+<td>no validation improvement for 2 epochs</td>
+<td>0.871</td>
+<td>30,621,191</td>
+</tr>
+<tr>
+<td>contrastive_only</td>
+<td>predefined</td>
+<td>0</td>
+<td>15</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.871</td>
+<td>1,052,673</td>
+</tr>
+<tr>
+<td>primary_revised</td>
+<td>predefined</td>
+<td>0</td>
+<td>15</td>
+<td>no validation improvement for 15 epochs</td>
+<td>0.871</td>
+<td>1,055,751</td>
+</tr>
+</tbody>
+</table>
+</main></body></html>

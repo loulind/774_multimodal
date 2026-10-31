@@ -1,0 +1,6 @@
+code,severity,metric,value,message
+no_clear_gain_over_zero_shot,info,retrieval_mean_recall_at_10,0.0,"No clear difference between the primary configuration and zero_shot on retrieval_mean_recall_at_10 (difference +0.000, 95% CI +0.000 to +0.000)."
+no_clear_gain_over_early_fusion,info,probe_macro_f1,0.00034765897460842243,"No clear difference between the primary configuration and early_fusion on probe_macro_f1 (difference +0.000, 95% CI -0.003 to +0.004)."
+no_clear_gain_over_late_fusion,info,probe_macro_f1,-0.001206400894373516,"No clear difference between the primary configuration and late_fusion on probe_macro_f1 (difference -0.001, 95% CI -0.004 to +0.002)."
+no_clear_gain_over_zero_shot,info,probe_macro_f1,0.0,"No clear difference between the primary configuration and zero_shot on probe_macro_f1 (difference +0.000, 95% CI +0.000 to +0.000)."
+no_clear_gain_over_zero_shot,info,clustering_ari,0.0,No clear difference between the primary configuration and zero_shot on clustering_ari (mean difference +0.000; primary better in 0/1 folds).

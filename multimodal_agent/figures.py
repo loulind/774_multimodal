@@ -97,6 +97,10 @@ def comparison(panels: list[dict], path: Path) -> str | None:
     for ax, p in zip(axes[:, 0], panels):
         rows = sorted(p["rows"], key=lambda r: r["value"])
         y = np.arange(len(rows))
+        vals = [x for r in rows for x in (r["value"], r.get("lo"), r.get("hi")) if x is not None]
+        chance, note = p.get("chance"), ""
+        if chance is not None and chance < min(vals) - 0.5 * max(max(vals) - min(vals), 1e-9):
+            note, chance = f"; chance {chance:.3f}, far left of the axis", None   # keep differences visible
         ax.grid(axis="x")
         ax.set_axisbelow(True)
         for yi, r in zip(y, rows):
@@ -107,13 +111,14 @@ def comparison(panels: list[dict], path: Path) -> str | None:
             if r["is_primary"] or r is rows[-1]:
                 ax.annotate(f"{r['value']:.3f}", (r["hi"] if r.get("hi") is not None else r["value"], yi),
                             xytext=(6, 0), textcoords="offset points", va="center", color=INK, fontsize=8)
-        if p.get("chance") is not None:
-            ax.axvline(p["chance"], color=MUTED, lw=1)
-            ax.annotate("chance", (p["chance"], len(rows) - 0.5), xytext=(3, 0), textcoords="offset points",
+        if chance is not None:
+            ax.axvline(chance, color=MUTED, lw=1)
+            ax.annotate("chance", (chance, len(rows) - 0.5), xytext=(3, 0), textcoords="offset points",
                         color=INK2, fontsize=7.5, va="bottom")
         ax.set_yticks(y, [r["name"] for r in rows])
         ax.set_ylim(-0.6, len(rows) - 0.4)
-        ax.set_title(p["title"] + (f"   ({p['interval']})" if p.get("interval") else ""))
+        ax.set_title(p["title"] + (f"   ({p['interval']}{note})" if p.get("interval") else
+                                   (f"   ({note[2:]})" if note else "")))
         ax.spines["left"].set_visible(False)
         ax.tick_params(axis="y", length=0)
     fig.tight_layout()

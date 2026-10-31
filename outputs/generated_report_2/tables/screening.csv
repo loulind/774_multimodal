@@ -1,0 +1,17 @@
+image,text,cca_recall_at_10,zero_shot_recall_at_10,alignment_recall_at_10,probe_macro_f1
+biomedclip_image,biomedclip_text,0.917,0.966,0.966,0.9337771756310538
+biomedclip_image,pubmedbert,0.599,,0.599,0.9337771756310538
+biomedclip_image,clip_b16_text,0.595,,0.595,0.9337771756310538
+biomedclip_image,minilm,0.55,,0.55,0.9337771756310538
+dinov2_base,biomedclip_text,0.511,,0.511,0.9140782240700975
+dinov2_base,pubmedbert,0.328,,0.328,0.9140782240700975
+dinov2_base,clip_b16_text,0.298,,0.298,0.9140782240700975
+dinov2_base,minilm,0.255,,0.255,0.9140782240700975
+clip_b16_image,biomedclip_text,0.579,,0.579,0.915147995195753
+clip_b16_image,pubmedbert,0.379,,0.379,0.915147995195753
+clip_b16_image,clip_b16_text,0.377,0.375,0.377,0.915147995195753
+clip_b16_image,minilm,0.291,,0.291,0.915147995195753
+resnet50,biomedclip_text,0.443,,0.443,0.8947035708192289
+resnet50,pubmedbert,0.272,,0.272,0.7270243615961608
+resnet50,clip_b16_text,0.25,,0.25,0.7270243615961608
+resnet50,minilm,0.23299999999999998,,0.23299999999999998,0.7270243615961608

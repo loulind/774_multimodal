@@ -1,0 +1,21 @@
+metric,representation,view,name,kind,value,sd,lo,hi,interval,per_fold,is_primary
+clustering_ari,primary,fused,primary (fused),configuration,0.6110992275662087,,,,,[0.6111],True
+clustering_ari,partial_finetune,fused,partial_finetune (fused),configuration,0.6110992275662087,,,,,[0.6111],False
+clustering_ari,contrastive_only,fused,contrastive_only (fused),configuration,0.6110992275662087,,,,,[0.6111],False
+clustering_ari,primary_revised,fused,primary_revised (fused),configuration,0.6110992275662087,,,,,[0.6111],False
+clustering_ari,zero_shot,fused,zero_shot (fused),baseline,0.6110992275662087,,,,,[0.6111],False
+clustering_ari,primary,text,primary (text),configuration,0.5546881970864669,,,,,[0.5547],True
+clustering_ari,partial_finetune,text,partial_finetune (text),configuration,0.5546881970864669,,,,,[0.5547],False
+clustering_ari,contrastive_only,text,contrastive_only (text),configuration,0.5546881970864669,,,,,[0.5547],False
+clustering_ari,primary_revised,text,primary_revised (text),configuration,0.5546881970864669,,,,,[0.5547],False
+clustering_ari,unimodal,text,unimodal (text),baseline,0.5546881970864669,,,,,[0.5547],False
+clustering_ari,zero_shot,text,zero_shot (text),baseline,0.5546881970864669,,,,,[0.5547],False
+clustering_ari,primary,image,primary (image),configuration,0.5032147472831348,,,,,[0.5032],True
+clustering_ari,partial_finetune,image,partial_finetune (image),configuration,0.5032147472831348,,,,,[0.5032],False
+clustering_ari,contrastive_only,image,contrastive_only (image),configuration,0.5032147472831348,,,,,[0.5032],False
+clustering_ari,primary_revised,image,primary_revised (image),configuration,0.5032147472831348,,,,,[0.5032],False
+clustering_ari,unimodal,image,unimodal (image),baseline,0.5032147472831348,,,,,[0.5032],False
+clustering_ari,zero_shot,image,zero_shot (image),baseline,0.5032147472831348,,,,,[0.5032],False
+clustering_ari,cca,fused,cca (fused),baseline,0.3006901893164051,,,,,[0.3007],False
+clustering_ari,cca,image,cca (image),baseline,0.1731527637057887,,,,,[0.1732],False
+clustering_ari,cca,text,cca (text),baseline,0.13818396691383916,,,,,[0.1382],False

@@ -1,5 +1,5 @@
 metric,representation,view,name,kind,value,sd,lo,hi,interval,per_fold,is_primary
-retrieval_mean_recall_at_10,hard_infonce,,hard_infonce,configuration,0.024995904060541224,0.0024926392495394807,0.022503264811001743,0.027488543310080705,±1 SD over 4 folds,"[0.0221, 0.0239, 0.0262, 0.0278]",True
-retrieval_mean_recall_at_10,patch_context_2x,,patch_context_2x,configuration,0.020518985438147362,0.002022496273894584,0.01849648916425278,0.022541481712041945,±1 SD over 4 folds,"[0.0181, 0.0199, 0.0228, 0.0212]",False
-retrieval_mean_recall_at_10,primary,,primary,configuration,0.019626468714406344,0.003812266697657608,0.015814202016748737,0.02343873541206395,±1 SD over 4 folds,"[0.0146, 0.0191, 0.0236, 0.0212]",False
+retrieval_mean_recall_at_10,hard_infonce,,hard_infonce,configuration,0.024365880787801324,0.0026305868020368487,0.021735293985764476,0.02699646758983817,±1 SD over 4 folds,"[0.0225, 0.0218, 0.0269, 0.0263]",True
+retrieval_mean_recall_at_10,patch_context_2x,,patch_context_2x,configuration,0.01904093077383342,0.002415364367768082,0.016625566406065335,0.0214562951416015,±1 SD over 4 folds,"[0.0184, 0.0191, 0.0223, 0.0164]",False
+retrieval_mean_recall_at_10,primary,,primary,configuration,0.017771053472076886,0.004551164572117974,0.013219888899958912,0.02232221804419486,±1 SD over 4 folds,"[0.0143, 0.0145, 0.024, 0.0183]",False
 retrieval_mean_recall_at_10,cca,,cca,baseline,0.011609549549093427,0.0015638903765002397,0.010045659172593188,0.013173439925593666,±1 SD over 4 folds,"[0.0099, 0.0112, 0.0137, 0.0116]",False

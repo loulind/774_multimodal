@@ -252,6 +252,7 @@ class HeadSpec(BaseModel):
     hidden_dim: int = 512
     n_layers: int = 2
     dropout: float = 0.1
+    residual: bool = False                        # identity at initialisation (pre-aligned encoders)
 
 
 class TrainingSpec(BaseModel):

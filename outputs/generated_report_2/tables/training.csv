@@ -1,0 +1,5 @@
+configuration,fold,best_epoch,epochs_run,stopped_because,best_val_score,selection_metric,final_temperature,n_trainable_parameters,seconds
+primary,predefined,0,15,no validation improvement for 15 epochs,0.8707,retrieval,0.04226,1055751,7.6
+partial_finetune,predefined,0,2,no validation improvement for 2 epochs,0.8707,retrieval,0.05351,30621191,940.4
+contrastive_only,predefined,0,15,no validation improvement for 15 epochs,0.8707,retrieval,0.04252,1052673,6.9
+primary_revised,predefined,0,15,no validation improvement for 15 epochs,0.8707,retrieval,0.06867,1055751,8.0

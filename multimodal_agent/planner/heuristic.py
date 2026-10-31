@@ -411,6 +411,23 @@ def choose_hyperparameters(ctx: Context, log: DecisionLog) -> tuple[HeadSpec, Tr
 # comparisons, evaluation, downstream
 # ---------------------------------------------------------------------------
 
+def choose_head_initialisation(mods: list[ModalityPlan], strategy: str, head: HeadSpec,
+                               log: DecisionLog) -> HeadSpec:
+    """Identity-initialised (residual) heads when the two encoders were pretrained together into one
+    aligned space, so training starts from the zero-shot solution instead of discarding it."""
+    encs = [m.encoder for m in mods]
+    if strategy == "linear_alignment" or len(encs) != 2 or not (is_dual_pair(*encs) or is_dual_pair(*encs[::-1])):
+        return head
+    dim = REGISTRY[encs[0]].dim
+    log.add("hyperparameters", "head initialisation", f"residual: identity at the start, {dim}-d",
+            f"{encs[0]} and {encs[1]} were pretrained together into one aligned space. Each head adds a learned "
+            "correction (initialised at zero) to that space, so training starts from the pretrained (zero-shot) "
+            "solution, and the starting point itself is a candidate when the best epoch is chosen on validation.",
+            [("randomly initialised heads", "they discard the pretrained alignment and must relearn it from far "
+              "fewer pairs than pretraining used")], {"embed_dim": dim})
+    return head.model_copy(update={"residual": True, "embed_dim": dim})
+
+
 def _finetune_ok(ctx: Context, cfg: ConfigSpec) -> tuple[bool, str]:
     encs = [m.encoder for m in cfg.modalities]
     if len(encs) != 2 or not is_dual_pair(encs[0], encs[1]):
@@ -553,6 +570,7 @@ def plan(profile: DataProfile, task: TaskSpec, budget: Budget, log: DecisionLog,
     mods = [_preprocess(ctx, n, _encoder(ctx, n, log), log) for n in ctx.pair]
     losses = choose_losses(ctx, strategy, log)
     head, training = choose_hyperparameters(ctx, log)
+    head = choose_head_initialisation(mods, strategy, head, log)
     primary = ConfigSpec(name="primary", role="primary", strategy=strategy, fusion="joint",
                          modalities=mods, losses=losses, head=head, training=training,
                          rationale="Rule-based choice; see the decision log.")

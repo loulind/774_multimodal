@@ -362,7 +362,7 @@ RECORD = {"retrieval": {"R@10": 0.33412, "chance": 0.002}, "n_spots": 1762,
 def test_number_check_allows_rounding_and_percentages():
     text = ("Recall@10 was 0.334 (Fig. 2; Table 1), i.e. 33.4% of queries, against chance 0.002 on "
             "1,762 spots over 4 folds of the top-50 genes; the gain was +0.094 (95% CI 0.041 to 0.151). "
-            "An invented value: 0.777.")
+            "An invented value: 0.777. A model name such as ResNet-50 is not a result.")
     check = W.check_numbers({"results_interpretation": text}, RECORD)
     assert [u["number"] for u in check["unmatched"]] == ["0.777"]
     assert check["n_checked"] == 8          # top-50, Recall@10, Fig. 2, 4 folds and 95% are not checked
@@ -385,3 +385,13 @@ def test_writer_llm_template_and_partial(tmp_path):
     out = W.write_sections(RECORD, client, log, template)
     assert out["source"] == "template" and log.by_step("writer")[0].chosen == "template"
     assert W.write_sections(RECORD, None, DecisionLog(), template)["source"] == "template"
+
+
+def test_below_zero_shot_suggests_a_residual_head(r2):
+    prof, proposal, _, _ = r2
+    plan = proposal.model_copy(deep=True)
+    plan.primary.head.residual = False
+    flags = [{"code": "worse_than_zero_shot", "severity": "warning", "metric": plan.evaluation.primary_metric,
+              "value": -0.04, "message": "below zero-shot"}]
+    crit, cfg = C.critique(plan, prof, [{}], [], flags, {}, None, DecisionLog(), MPS)
+    assert [c.path for c in crit.changes] == ["head.residual"] and cfg.head.residual

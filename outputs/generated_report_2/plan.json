@@ -1,0 +1,286 @@
+{
+ "task": {
+  "raw_objective": "Learn a joint image–caption embedding for image–text retrieval and imaging-modality classification.",
+  "tasks": [
+   "joint_embedding",
+   "retrieval",
+   "classification"
+  ],
+  "primary_task": "retrieval",
+  "pair": [
+   "image",
+   "text"
+  ],
+  "prediction": null,
+  "label_column": "modality",
+  "label_evidence": "the objective names column 'modality'",
+  "modality_mentions": {
+   "image": [
+    "image",
+    "image",
+    "imaging"
+   ],
+   "text": [
+    "caption",
+    "text"
+   ]
+  },
+  "evidence": {
+   "retrieval": [
+    "retrieval"
+   ],
+   "classification": [
+    "classification"
+   ],
+   "joint_embedding": [
+    "joint image-caption embedding"
+   ]
+  },
+  "source": "heuristic"
+ },
+ "split": {
+  "strategy": "predefined",
+  "group_column": "article",
+  "n_folds": 1,
+  "val_fraction": 0.1,
+  "test_fraction": 0.2,
+  "stratify_column": "modality"
+ },
+ "configs": [
+  {
+   "name": "primary",
+   "role": "primary",
+   "strategy": "contrastive_alignment",
+   "fusion": "joint",
+   "modalities": [
+    {
+     "modality": "image",
+     "encoder": "biomedclip_image",
+     "regime": "frozen",
+     "trainable_blocks": 0,
+     "patch_context": null,
+     "colour_normalisation": "none",
+     "greyscale_to_rgb": true,
+     "augment": false,
+     "text_max_tokens": null,
+     "text_cleaning": "basic",
+     "n_variable_features": null,
+     "matrix_input": null,
+     "pca_components": null
+    },
+    {
+     "modality": "text",
+     "encoder": "biomedclip_text",
+     "regime": "frozen",
+     "trainable_blocks": 0,
+     "patch_context": null,
+     "colour_normalisation": "none",
+     "greyscale_to_rgb": false,
+     "augment": false,
+     "text_max_tokens": 128,
+     "text_cleaning": "basic",
+     "n_variable_features": null,
+     "matrix_input": null,
+     "pca_components": null
+    }
+   ],
+   "losses": [
+    {
+     "name": "infonce",
+     "weight": 1.0
+    },
+    {
+     "name": "supervised_ce",
+     "weight": 0.5
+    }
+   ],
+   "head": {
+    "embed_dim": 512,
+    "hidden_dim": 512,
+    "n_layers": 2,
+    "dropout": 0.1,
+    "residual": true
+   },
+   "training": {
+    "batch_size": 512,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "max_epochs": 300,
+    "patience": 15,
+    "temperature_init": 0.07,
+    "learnable_temperature": true,
+    "soft_target_temperature": 0.1,
+    "finetune_lr": 0.00001,
+    "train_seconds": 180.0
+   },
+   "rationale": "Frozen BiomedCLIP dual encoder (best screening: alignment R@10 0.966, image probe F1 0.934). Residual 512-d heads start from the zero-shot solution. InfoNCE plus a CE term with weight 0.5 on 'modality', because the objective asks for classification."
+  },
+  {
+   "name": "partial_finetune",
+   "role": "comparison",
+   "strategy": "contrastive_alignment",
+   "fusion": "joint",
+   "modalities": [
+    {
+     "modality": "image",
+     "encoder": "biomedclip_image",
+     "regime": "partial_finetune",
+     "trainable_blocks": 2,
+     "patch_context": null,
+     "colour_normalisation": "none",
+     "greyscale_to_rgb": true,
+     "augment": true,
+     "text_max_tokens": null,
+     "text_cleaning": "basic",
+     "n_variable_features": null,
+     "matrix_input": null,
+     "pca_components": null
+    },
+    {
+     "modality": "text",
+     "encoder": "biomedclip_text",
+     "regime": "partial_finetune",
+     "trainable_blocks": 2,
+     "patch_context": null,
+     "colour_normalisation": "none",
+     "greyscale_to_rgb": false,
+     "augment": false,
+     "text_max_tokens": 128,
+     "text_cleaning": "basic",
+     "n_variable_features": null,
+     "matrix_input": null,
+     "pca_components": null
+    }
+   ],
+   "losses": [
+    {
+     "name": "infonce",
+     "weight": 1.0
+    },
+    {
+     "name": "supervised_ce",
+     "weight": 0.5
+    }
+   ],
+   "head": {
+    "embed_dim": 512,
+    "hidden_dim": 512,
+    "n_layers": 2,
+    "dropout": 0.1,
+    "residual": true
+   },
+   "training": {
+    "batch_size": 128,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "max_epochs": 5,
+    "patience": 2,
+    "temperature_init": 0.07,
+    "learnable_temperature": true,
+    "soft_target_temperature": 0.1,
+    "finetune_lr": 0.00001,
+    "train_seconds": 1200.0
+   },
+   "rationale": "Tests the frozen-backbone decision. ~20k training pairs and about 2 epochs fit in the 1200 s fine-tuning budget on mps. Batch raised to 128 so the comparison has more negatives per positive than at 64."
+  },
+  {
+   "name": "contrastive_only",
+   "role": "comparison",
+   "strategy": "contrastive_alignment",
+   "fusion": "joint",
+   "modalities": [
+    {
+     "modality": "image",
+     "encoder": "biomedclip_image",
+     "regime": "frozen",
+     "trainable_blocks": 0,
+     "patch_context": null,
+     "colour_normalisation": "none",
+     "greyscale_to_rgb": true,
+     "augment": false,
+     "text_max_tokens": null,
+     "text_cleaning": "basic",
+     "n_variable_features": null,
+     "matrix_input": null,
+     "pca_components": null
+    },
+    {
+     "modality": "text",
+     "encoder": "biomedclip_text",
+     "regime": "frozen",
+     "trainable_blocks": 0,
+     "patch_context": null,
+     "colour_normalisation": "none",
+     "greyscale_to_rgb": false,
+     "augment": false,
+     "text_max_tokens": 128,
+     "text_cleaning": "basic",
+     "n_variable_features": null,
+     "matrix_input": null,
+     "pca_components": null
+    }
+   ],
+   "losses": [
+    {
+     "name": "infonce",
+     "weight": 1.0
+    }
+   ],
+   "head": {
+    "embed_dim": 512,
+    "hidden_dim": 512,
+    "n_layers": 2,
+    "dropout": 0.1,
+    "residual": true
+   },
+   "training": {
+    "batch_size": 512,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "max_epochs": 300,
+    "patience": 15,
+    "temperature_init": 0.07,
+    "learnable_temperature": true,
+    "soft_target_temperature": 0.1,
+    "finetune_lr": 0.00001,
+    "train_seconds": 180.0
+   },
+   "rationale": "Tests whether the supervised CE term helps classification without costing retrieval recall."
+  }
+ ],
+ "evaluation": {
+  "primary_metric": "retrieval_mean_recall_at_10",
+  "metrics": [
+   "retrieval_recall_at_k",
+   "linear_probe",
+   "knn_accuracy",
+   "clustering_ari_nmi",
+   "retrieval_label_match_at_k",
+   "alignment_uniformity",
+   "modality_gap",
+   "effective_rank"
+  ],
+  "baselines": [
+   "unimodal",
+   "chance",
+   "cca",
+   "early_fusion",
+   "late_fusion",
+   "zero_shot"
+  ],
+  "label_column": "modality",
+  "group_column": null,
+  "retrieval_ks": [
+   1,
+   5,
+   10
+  ],
+  "prediction_genes": 50
+ },
+ "downstream": [
+  "retrieval_examples",
+  "classification"
+ ],
+ "rationale": "Frozen BiomedCLIP with residual contrastive heads and an auxiliary CE term on 'modality', using the predefined article-disjoint train split. Two comparisons test (a) partial fine-tuning and (b) dropping the CE term. Compute: 1×(180+1200+180) + 180 refit + 180 critic revision = 1920 s, within the 2700 s total.",
+ "source": "llm"
+}

@@ -1,9 +1,8 @@
 code,severity,metric,value,message
-no_clear_gain_over_ridge,info,prediction_mean_pearson_top50,-0.00865500130200985,No clear difference between the primary configuration and ridge on prediction_mean_pearson_top50 (mean difference -0.009; primary better in 2/4 folds).
-no_clear_gain_over_unimodal,info,probe_macro_f1,-0.044094122379849124,No clear difference between the primary configuration and unimodal on probe_macro_f1 (mean difference -0.044; primary better in 1/4 folds).
-no_clear_gain_over_early_fusion,info,probe_macro_f1,-0.060273671061610704,No clear difference between the primary configuration and early_fusion on probe_macro_f1 (mean difference -0.060; primary better in 1/4 folds).
-no_clear_gain_over_late_fusion,info,probe_macro_f1,-0.022182871748650468,No clear difference between the primary configuration and late_fusion on probe_macro_f1 (mean difference -0.022; primary better in 2/4 folds).
-no_clear_gain_over_cca,info,probe_macro_f1,0.038467713249640254,No clear difference between the primary configuration and cca on probe_macro_f1 (mean difference +0.038; primary better in 3/4 folds).
-no_clear_gain_over_unimodal,info,clustering_ari,-0.011041049880640225,No clear difference between the primary configuration and unimodal on clustering_ari (mean difference -0.011; primary better in 2/4 folds).
-no_clear_gain_over_cca,info,clustering_ari,0.0008004485406499368,No clear difference between the primary configuration and cca on clustering_ari (mean difference +0.001; primary better in 2/4 folds).
-batch_confounding,warning,,0.39739856123924255,Held-out embeddings cluster more by group (silhouette 0.40) than by label (0.09).
+no_clear_gain_over_ridge,info,prediction_mean_pearson_top50,-0.010040275271509247,No clear difference between the primary configuration and ridge on prediction_mean_pearson_top50 (mean difference -0.010; primary better in 2/4 folds).
+no_clear_gain_over_unimodal,info,probe_macro_f1,-0.02745277079828993,No clear difference between the primary configuration and unimodal on probe_macro_f1 (mean difference -0.027; primary better in 2/4 folds).
+no_clear_gain_over_early_fusion,info,probe_macro_f1,-0.04363231948005151,No clear difference between the primary configuration and early_fusion on probe_macro_f1 (mean difference -0.044; primary better in 2/4 folds).
+no_clear_gain_over_late_fusion,info,probe_macro_f1,-0.0055415201670912725,No clear difference between the primary configuration and late_fusion on probe_macro_f1 (mean difference -0.006; primary better in 2/4 folds).
+no_clear_gain_over_unimodal,info,clustering_ari,-0.03214362835652293,No clear difference between the primary configuration and unimodal on clustering_ari (mean difference -0.032; primary better in 1/4 folds).
+no_clear_gain_over_cca,info,clustering_ari,-0.020302129935232765,No clear difference between the primary configuration and cca on clustering_ari (mean difference -0.020; primary better in 2/4 folds).
+batch_confounding,warning,,0.3822031617164612,Held-out embeddings cluster more by group (silhouette 0.38) than by label (0.05).

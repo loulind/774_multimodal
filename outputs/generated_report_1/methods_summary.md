@@ -15,9 +15,9 @@ Generated from the executed plan (source: llm). Final configuration: 'hard_infon
 
 ## Representation learning
 
-- Strategy: contrastive_alignment (joint fusion); projection heads of 2 layers (hidden 512, dropout 0.1) into a 256-dimensional L2-normalised joint space.
+- Strategy: contrastive_alignment (joint fusion); projection heads of 2 layers (hidden 512, dropout 0.2) into a 256-dimensional L2-normalised joint space.
 - Objective: 1.0 x infonce + 1.0 x cross_modal_regression.
-- Optimiser AdamW, lr 0.001, weight decay 0.0001, batch 512, up to 300 epochs, early stopping after 15 epochs without validation improvement, time cap 135s per fit; best validation epoch kept. Seed 774.
+- Optimiser AdamW, lr 0.001, weight decay 0.001, batch 512, up to 300 epochs, early stopping after 15 epochs without validation improvement, time cap 135s per fit; best validation epoch kept. Seed 774.
 
 ## Evaluation
 
@@ -28,6 +28,6 @@ Generated from the executed plan (source: llm). Final configuration: 'hard_infon
 
 ## Comparison configurations
 
-- **hard_infonce**: Tests the soft-target decision (near-twin fraction 0.232).
-- **patch_context_2x**: Tests the patch-size decision: spot spacing is 1.88x the spot diameter, so a 2x patch adds surrounding tissue context up to about the neighbouring spots without overlapping their centres.
+- **hard_infonce**: Tests the soft-target decision (near_twin_fraction 0.232); identical to primary otherwise.
+- **patch_context_2x**: Tests the patch-size decision: 2 x 145 px = 290 px, about the centre-to-centre spacing (273 px), so it adds surrounding tissue context without reaching far into neighbouring spots.
 - Critic revision 'hard_infonce': kept.

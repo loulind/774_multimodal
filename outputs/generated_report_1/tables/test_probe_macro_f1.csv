@@ -1,17 +1,17 @@
 metric,representation,view,name,kind,value,sd,lo,hi,interval,per_fold,is_primary
-probe_macro_f1,patch_context_2x,fused,patch_context_2x (fused),configuration,0.3675351856345186,0.08995681262432949,0.2775783730101891,0.45749199825884806,±1 SD over 4 folds,"[0.3358, 0.3085, 0.3245, 0.5014]",False
+probe_macro_f1,patch_context_2x,image,patch_context_2x (image),configuration,0.3763590029555583,0.057547212943276735,0.31881179001228155,0.43390621589883505,±1 SD over 4 folds,"[0.3039, 0.3563, 0.4215, 0.4237]",False
 probe_macro_f1,early_fusion,concat,early_fusion (concat),baseline,0.35715314699865564,0.10391474277717072,0.2532384042214849,0.46106788977582636,±1 SD over 4 folds,"[0.3332, 0.2394, 0.3652, 0.4909]",False
-probe_macro_f1,patch_context_2x,image,patch_context_2x (image),configuration,0.3556488514434923,0.09558295715916032,0.26006589428433197,0.4512318086026526,±1 SD over 4 folds,"[0.2235, 0.3627, 0.3862, 0.4503]",False
+probe_macro_f1,patch_context_2x,fused,patch_context_2x (fused),configuration,0.35482709483769875,0.09826204763559035,0.2565650472021084,0.45308914247328913,±1 SD over 4 folds,"[0.2867, 0.287, 0.3503, 0.4952]",False
 probe_macro_f1,cca,image,cca (image),baseline,0.3419260541122416,0.09257039185907033,0.24935566225317124,0.43449644597131193,±1 SD over 4 folds,"[0.2469, 0.2783, 0.4256, 0.4169]",False
 probe_macro_f1,unimodal,image,unimodal (image),baseline,0.3239700557663954,0.06882449634071272,0.25514555942568273,0.3927945521071081,±1 SD over 4 folds,"[0.3203, 0.228, 0.3697, 0.3778]",False
+probe_macro_f1,hard_infonce,image,hard_infonce (image),configuration,0.32353812382533176,0.07750739380826373,0.24603073001706804,0.40104551763359547,±1 SD over 4 folds,"[0.2596, 0.2573, 0.3653, 0.4119]",True
 probe_macro_f1,late_fusion,average,late_fusion (average),baseline,0.3190623476856954,0.09983186441433546,0.21923048327135997,0.41889421210003086,±1 SD over 4 folds,"[0.2997, 0.1885, 0.3693, 0.4188]",False
-probe_macro_f1,primary,image,primary (image),configuration,0.3071113127604632,0.055865114323920745,0.2512461984365425,0.36297642708438393,±1 SD over 4 folds,"[0.2729, 0.2521, 0.3274, 0.3761]",False
-probe_macro_f1,hard_infonce,image,hard_infonce (image),configuration,0.30401502193250146,0.07752373013623456,0.2264912917962669,0.381538752068736,±1 SD over 4 folds,"[0.2378, 0.2386, 0.3508, 0.3888]",True
-probe_macro_f1,hard_infonce,fused,hard_infonce (fused),configuration,0.29687947593704495,0.11270371891353273,0.18417575702351222,0.4095831948505777,±1 SD over 4 folds,"[0.1585, 0.28, 0.3169, 0.4321]",True
-probe_macro_f1,primary,fused,primary (fused),configuration,0.2922329411269855,0.11581799013895874,0.17641495098802676,0.40805093126594427,±1 SD over 4 folds,"[0.2251, 0.1979, 0.2899, 0.456]",False
+probe_macro_f1,hard_infonce,fused,hard_infonce (fused),configuration,0.31352082751860416,0.12578053589582128,0.18774029162278288,0.43930136341442544,±1 SD over 4 folds,"[0.2078, 0.2502, 0.3032, 0.4929]",True
+probe_macro_f1,primary,fused,primary (fused),configuration,0.3123019333581702,0.1442584188723809,0.1680435144857893,0.4565603522305511,±1 SD over 4 folds,"[0.2773, 0.164, 0.298, 0.5098]",False
+probe_macro_f1,primary,image,primary (image),configuration,0.295739546782605,0.07675864553363637,0.21898090124896863,0.37249819231624137,±1 SD over 4 folds,"[0.2162, 0.2452, 0.3477, 0.3738]",False
 probe_macro_f1,cca,fused,cca (fused),baseline,0.2584117626874047,0.16017112821034277,0.09824063447706191,0.4185828908977475,±1 SD over 4 folds,"[0.1315, 0.136, 0.2971, 0.469]",False
+probe_macro_f1,patch_context_2x,expression,patch_context_2x (expression),configuration,0.2501775105858593,0.14995656088145395,0.10022094970440534,0.4001340714673133,±1 SD over 4 folds,"[0.1953, 0.1218, 0.2169, 0.4667]",False
+probe_macro_f1,hard_infonce,expression,hard_infonce (expression),configuration,0.24982492297745137,0.1675387960435852,0.08228612693386617,0.4173637190210366,±1 SD over 4 folds,"[0.1444, 0.1531, 0.2037, 0.4981]",True
 probe_macro_f1,unimodal,expression,unimodal (expression),baseline,0.24480684563718927,0.1437230216153211,0.10108382402186816,0.3885298672525104,±1 SD over 4 folds,"[0.2074, 0.1048, 0.2212, 0.4458]",False
-probe_macro_f1,primary,expression,primary (expression),configuration,0.2442145385518965,0.13889322710349047,0.10532131144840604,0.38310776565538696,±1 SD over 4 folds,"[0.1946, 0.1285, 0.2078, 0.4459]",False
-probe_macro_f1,hard_infonce,expression,hard_infonce (expression),configuration,0.243854017793335,0.15811365578316666,0.08574036201016833,0.40196767357650165,±1 SD over 4 folds,"[0.123, 0.1499, 0.2319, 0.4706]",True
-probe_macro_f1,patch_context_2x,expression,patch_context_2x (expression),configuration,0.23932854861338393,0.1384464718381913,0.10088207677519262,0.37777502045157524,±1 SD over 4 folds,"[0.1899, 0.1259, 0.2005, 0.441]",False
+probe_macro_f1,primary,expression,primary (expression),configuration,0.23726863464930859,0.14255420259613613,0.09471443205317245,0.37982283724544474,±1 SD over 4 folds,"[0.1784, 0.1191, 0.2078, 0.4438]",False
 probe_macro_f1,cca,expression,cca (expression),baseline,0.22949772187055512,0.12141082939411575,0.10808689247643936,0.35090855126467085,±1 SD over 4 folds,"[0.1722, 0.1153, 0.2341, 0.3964]",False

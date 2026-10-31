@@ -28,6 +28,7 @@ You are the critic in an automated multimodal representation-learning agent. Con
     - more epochs or time, when budget remains and training stopped on a cap while still improving;
     - a warmer, fixed temperature when embeddings collapse;
     - colour normalisation when embeddings group by batch;
+    - a residual head (`head.residual`, identity at the start) when the encoders are a pre-aligned pair and the trained heads fall below the zero-shot baseline;
     - a larger weight on the regression term when a linear predictor beats the trained head.
 - **Be explicit about uncertainty**, and name the metric you expect to move.
 

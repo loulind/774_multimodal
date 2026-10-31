@@ -1,0 +1,4 @@
+code,severity,metric,value,message
+no_clear_gain_over_zero_shot,info,retrieval_mean_recall_at_10,0.0,"No clear difference between the primary configuration and zero_shot on retrieval_mean_recall_at_10 (difference +0.000, 95% CI +0.000 to +0.000)."
+no_clear_gain_over_unimodal,info,clustering_ari,-0.0037080606991254372,No clear difference between the primary configuration and unimodal on clustering_ari (mean difference -0.004; primary better in 0/1 folds).
+no_clear_gain_over_zero_shot,info,clustering_ari,0.0,No clear difference between the primary configuration and zero_shot on clustering_ari (mean difference +0.000; primary better in 0/1 folds).

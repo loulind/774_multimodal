@@ -327,18 +327,18 @@
     "source": "system"
   },
   {
-    "step": "split",
-    "decision": "keep grouped 4-fold CV by patient",
-    "chosen": "grouped_kfold on 'patient', 4 folds",
-    "rationale": "Patient explains 77% of the variance in expression PCs (group silhouette 0.63), and 36 slides are nested in 8 patients. Holding out whole patients is the only way to keep held-out data independent. Four folds (2 test patients each, 1 validation patient) leave about 8.5k training pairs per fit and fit the max_folds=4 limit. Budget: 4x(180+135+135) + 180 refit + 4x180 critic = 2700 s, exactly the total.",
+    "step": "hyperparameters",
+    "decision": "head regularisation",
+    "chosen": "dropout 0.2 (was 0.1), weight_decay 1e-3 (was 1e-4), in all three configs",
+    "rationale": "Patient explains 77% of the variance of the top expression components (group_silhouette 0.63). With 8 patients and grouped 4-fold CV plus one validation patient, each fit trains on only about 5 patients. The heads can therefore memorise patient-specific expression offsets that will not carry over to the held-out patients. Somewhat stronger regularisation, together with early stopping on a held-out patient, guards against this. Applying the same change to every config keeps the comparisons controlled.",
     "alternatives_rejected": [
       {
-        "option": "split by slide",
-        "reason": "slides are nested in patients, so patient effects would leak across splits"
+        "option": "keep dropout 0.1 / wd 1e-4",
+        "reason": "higher risk of fitting patient batch structure when only about 5 training groups are available"
       },
       {
-        "option": "leave-one-patient-out",
-        "reason": "8 folds exceed max_folds=4 and the time budget"
+        "option": "smaller embed_dim (e.g. 128)",
+        "reason": "about 8.5k pairs already support a 256-d space; shrinking it changes capacity as well as regularisation"
       }
     ],
     "evidence": {},
@@ -346,56 +346,19 @@
   },
   {
     "step": "encoder",
-    "decision": "adopt phikon, frozen",
-    "chosen": "phikon",
-    "rationale": "phikon is best on every screening metric: recall@10 0.087 (next best 0.063), ridge R2 0.215 (next best 0.184) and probe F1 0.43 (next best 0.39). Pretraining was on TCGA tiles, not on these spot patches. Because there is no zero-shot baseline, any corpus overlap could only make the frozen features slightly optimistic, not the reported baselines. With about 8.5k pairs from only 5 training patients per fold, frozen features with small heads are the low-variance choice.",
+    "decision": "image encoder (adopted) and pretraining-overlap note",
+    "chosen": "phikon, frozen",
+    "rationale": "phikon is best on all three screening metrics: alignment recall@10 0.087 vs \u22640.063, ridge R\u00b2 0.215 vs \u22640.184, and probe macro-F1 0.43 vs \u22640.39. Its pretraining corpus is TCGA histology tiles, which include stained tissue of possibly similar type. It has no zero-shot partner, so no zero-shot score is inflated. Some overlap in tissue domain may still favour it in the frozen-feature baselines, so this should be noted when reporting. Fine-tuning is not used: 4 folds x 1200 s would exceed the 2700 s total budget.",
     "alternatives_rejected": [
       {
-        "option": "partial fine-tuning of phikon",
-        "reason": "too few independent groups (5 training patients) for 86M-parameter adaptation, and it would use the time needed for the comparisons"
+        "option": "partial_finetune phikon",
+        "reason": "fine-tuning budget of 1200 s per fit x 4 folds exceeds the 2700 s total; only about 8.5k pairs"
       },
       {
-        "option": "biomedclip_image",
-        "reason": "ridge R2 0.026 is far below phikon's 0.215"
+        "option": "plip_image / biomedclip_image with residual heads",
+        "reason": "their partner towers are text, not expression, so they offer no pre-aligned advantage, and they screen lower"
       }
     ],
-    "evidence": {},
-    "source": "llm"
-  },
-  {
-    "step": "losses",
-    "decision": "adopt soft InfoNCE + regression, with hard InfoNCE as a comparison",
-    "chosen": "soft_infonce (1.0) + cross_modal_regression (1.0)",
-    "rationale": "23.2% of expression spots have a near-twin, so hard negatives would often be false negatives. The objective explicitly asks for prediction of expression from histology, which justifies the regression term. The labels are not named in the objective, are only 23% present and stay evaluation-only (no supervised_ce).",
-    "alternatives_rejected": [
-      {
-        "option": "add supervised_ce on 'label'",
-        "reason": "labels are requested only for evaluation; training on them would inflate the probe and kNN metrics"
-      }
-    ],
-    "evidence": {},
-    "source": "llm"
-  },
-  {
-    "step": "comparison",
-    "decision": "keep both comparisons",
-    "chosen": "hard_infonce and patch_context_2x",
-    "rationale": "These are the two least certain choices. Soft targets depend on a near-twin threshold. Patch size matters because spot spacing is 1.88x the diameter, so a 2x patch adds context from the gaps between spots, and expression has spatial autocorrelation (median Moran's I 0.14) that context may capture. Together they use the remaining budget exactly.",
-    "alternatives_rejected": [
-      {
-        "option": "compare against a different image encoder",
-        "reason": "screening already separates them clearly (0.087 vs \u22640.063)"
-      }
-    ],
-    "evidence": {},
-    "source": "llm"
-  },
-  {
-    "step": "evaluation",
-    "decision": "keep retrieval recall@10 as the primary metric; keep prediction Pearson as secondary",
-    "chosen": "retrieval_mean_recall_at_10",
-    "rationale": "Retrieval is the first measurable task in the objective. Pearson on the top 50 genes, measured against ridge and CCA, covers the prediction goal. Group silhouette tracks how much patient effect is left in the joint space.",
-    "alternatives_rejected": [],
     "evidence": {},
     "source": "llm"
   },
@@ -403,12 +366,19 @@
     "step": "planner",
     "decision": "planner used",
     "chosen": "llm",
-    "rationale": "LLM adopted the rule-based proposal unchanged.",
+    "rationale": "LLM revised the rule-based proposal: configs[primary].head.dropout: 0.1 -> 0.2; configs[primary].training.weight_decay: 0.0001 -> 0.001; configs[hard_infonce].head.dropout: 0.1 -> 0.2; configs[hard_infonce].training.weight_decay: 0.0001 -> 0.001; configs[patch_context_2x].head.dropout: 0.1 -> 0.2; configs[patch_context_2x].training.weight_decay: 0.0001 -> 0.001",
     "alternatives_rejected": [],
     "evidence": {
       "llm_model": "claude-opus-5-5",
-      "n_changes": 0,
-      "changes": []
+      "n_changes": 6,
+      "changes": [
+        "configs[primary].head.dropout: 0.1 -> 0.2",
+        "configs[primary].training.weight_decay: 0.0001 -> 0.001",
+        "configs[hard_infonce].head.dropout: 0.1 -> 0.2",
+        "configs[hard_infonce].training.weight_decay: 0.0001 -> 0.001",
+        "configs[patch_context_2x].head.dropout: 0.1 -> 0.2",
+        "configs[patch_context_2x].training.weight_decay: 0.0001 -> 0.001"
+      ]
     },
     "source": "llm"
   },
@@ -475,8 +445,8 @@
   {
     "step": "training",
     "decision": "fit 'primary' on fold1",
-    "chosen": "best epoch 10 of 25",
-    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0478; the best epoch's weights are kept.",
+    "chosen": "best epoch 11 of 26",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0492; the best epoch's weights are kept.",
     "alternatives_rejected": [],
     "evidence": {
       "n_trainable_parameters": 1868753
@@ -486,8 +456,8 @@
   {
     "step": "training",
     "decision": "fit 'primary' on fold2",
-    "chosen": "best epoch 4 of 19",
-    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0168; the best epoch's weights are kept.",
+    "chosen": "best epoch 2 of 17",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0160; the best epoch's weights are kept.",
     "alternatives_rejected": [],
     "evidence": {
       "n_trainable_parameters": 1868753
@@ -498,7 +468,7 @@
     "step": "training",
     "decision": "fit 'primary' on fold3",
     "chosen": "best epoch 3 of 18",
-    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0306; the best epoch's weights are kept.",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0319; the best epoch's weights are kept.",
     "alternatives_rejected": [],
     "evidence": {
       "n_trainable_parameters": 1868753
@@ -508,8 +478,8 @@
   {
     "step": "training",
     "decision": "fit 'primary' on fold4",
-    "chosen": "best epoch 7 of 22",
-    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0398; the best epoch's weights are kept.",
+    "chosen": "best epoch 11 of 26",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0382; the best epoch's weights are kept.",
     "alternatives_rejected": [],
     "evidence": {
       "n_trainable_parameters": 1868753
@@ -519,8 +489,8 @@
   {
     "step": "training",
     "decision": "fit 'hard_infonce' on fold1",
-    "chosen": "best epoch 5 of 20",
-    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0521; the best epoch's weights are kept.",
+    "chosen": "best epoch 10 of 25",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0539; the best epoch's weights are kept.",
     "alternatives_rejected": [],
     "evidence": {
       "n_trainable_parameters": 1868753
@@ -530,8 +500,8 @@
   {
     "step": "training",
     "decision": "fit 'hard_infonce' on fold2",
-    "chosen": "best epoch 4 of 19",
-    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0203; the best epoch's weights are kept.",
+    "chosen": "best epoch 7 of 22",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0210; the best epoch's weights are kept.",
     "alternatives_rejected": [],
     "evidence": {
       "n_trainable_parameters": 1868753
@@ -542,7 +512,7 @@
     "step": "training",
     "decision": "fit 'hard_infonce' on fold3",
     "chosen": "best epoch 3 of 18",
-    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0390; the best epoch's weights are kept.",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0347; the best epoch's weights are kept.",
     "alternatives_rejected": [],
     "evidence": {
       "n_trainable_parameters": 1868753
@@ -552,8 +522,8 @@
   {
     "step": "training",
     "decision": "fit 'hard_infonce' on fold4",
-    "chosen": "best epoch 8 of 23",
-    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0499; the best epoch's weights are kept.",
+    "chosen": "best epoch 10 of 25",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0510; the best epoch's weights are kept.",
     "alternatives_rejected": [],
     "evidence": {
       "n_trainable_parameters": 1868753
@@ -564,7 +534,7 @@
     "step": "training",
     "decision": "fit 'patch_context_2x' on fold1",
     "chosen": "best epoch 8 of 23",
-    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0495; the best epoch's weights are kept.",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0519; the best epoch's weights are kept.",
     "alternatives_rejected": [],
     "evidence": {
       "n_trainable_parameters": 1868753
@@ -575,7 +545,7 @@
     "step": "training",
     "decision": "fit 'patch_context_2x' on fold2",
     "chosen": "best epoch 3 of 18",
-    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0180; the best epoch's weights are kept.",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0187; the best epoch's weights are kept.",
     "alternatives_rejected": [],
     "evidence": {
       "n_trainable_parameters": 1868753
@@ -585,8 +555,8 @@
   {
     "step": "training",
     "decision": "fit 'patch_context_2x' on fold3",
-    "chosen": "best epoch 3 of 18",
-    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0349; the best epoch's weights are kept.",
+    "chosen": "best epoch 14 of 29",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0382; the best epoch's weights are kept.",
     "alternatives_rejected": [],
     "evidence": {
       "n_trainable_parameters": 1868753
@@ -596,8 +566,8 @@
   {
     "step": "training",
     "decision": "fit 'patch_context_2x' on fold4",
-    "chosen": "best epoch 7 of 22",
-    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0423; the best epoch's weights are kept.",
+    "chosen": "best epoch 19 of 34",
+    "rationale": "Stopped: no validation improvement for 15 epochs. Validation retrieval 0.0450; the best epoch's weights are kept.",
     "alternatives_rejected": [],
     "evidence": {
       "n_trainable_parameters": 1868753
@@ -608,7 +578,7 @@
     "step": "critic",
     "decision": "trigger: no_clear_gain_over_ridge",
     "chosen": "none",
-    "rationale": "No clear difference between the primary configuration and ridge on prediction_mean_pearson_top50 (mean difference -0.002; primary better in 2/4 folds).",
+    "rationale": "No clear difference between the primary configuration and ridge on prediction_mean_pearson_top50 (mean difference -0.004; primary better in 2/4 folds).",
     "alternatives_rejected": [],
     "evidence": {
       "severity": "info",
@@ -620,7 +590,7 @@
     "step": "critic",
     "decision": "trigger: no_clear_gain_over_unimodal",
     "chosen": "none",
-    "rationale": "No clear difference between the primary configuration and unimodal on clustering_ari (mean difference +0.039; primary better in 2/4 folds).",
+    "rationale": "No clear difference between the primary configuration and unimodal on clustering_ari (mean difference +0.033; primary better in 1/4 folds).",
     "alternatives_rejected": [],
     "evidence": {
       "severity": "info",
@@ -632,7 +602,7 @@
     "step": "critic",
     "decision": "trigger: no_clear_gain_over_cca",
     "chosen": "none",
-    "rationale": "No clear difference between the primary configuration and cca on clustering_ari (mean difference +0.032; primary better in 3/4 folds).",
+    "rationale": "No clear difference between the primary configuration and cca on clustering_ari (mean difference +0.026; primary better in 3/4 folds).",
     "alternatives_rejected": [],
     "evidence": {
       "severity": "info",
@@ -656,7 +626,7 @@
     "step": "critic",
     "decision": "trigger: comparison_better",
     "chosen": "none",
-    "rationale": "Comparison 'patch_context_2x' scores higher than the primary on retrieval_mean_recall_at_10 (0.036 vs 0.034); within noise.",
+    "rationale": "Comparison 'patch_context_2x' scores higher than the primary on retrieval_mean_recall_at_10 (0.038 vs 0.034); within noise.",
     "alternatives_rejected": [],
     "evidence": {
       "severity": "info",
@@ -668,27 +638,27 @@
     "step": "critic",
     "decision": "revise the plan?",
     "chosen": "promote 'hard_infonce' to primary",
-    "rationale": "The primary works but its scores are low. Its validation mean recall@10 is 0.0335, about 6x chance (\u22480.0054). It beats CCA (0.0179) in 4/4 folds, by +0.016 \u00b1 0.008. For image-to-expression prediction it only ties ridge: Pearson on the top 50 genes is 0.150 vs 0.152, and the primary is better in just 2/4 folds. The automatic flag calls hard_infonce's gain on recall@10 'within noise', but it beat the primary in every fold: +0.0043, +0.0041, +0.0084, +0.0101 (mean +0.0067, SD \u22480.003). patch_context_2x was also better in 4/4 folds, by less (+0.0025). The soft-target loss was chosen because 23% of spots have near-twins, but the evidence goes against that choice. On the same folds, hard InfoNCE gave higher recall@10 for every held-out patient group, by about 20% relative (0.040 vs 0.0335). A paired comparison over four folds gives t \u2248 4.5, which is small evidence but consistent. Switching needs no extra compute: the per-fold results already exist and already beat the primary. One caveat: all scores are best-epoch scores picked on validation, so they are slightly optimistic, but that bias is the same for both configurations. Training curves show early peaks (best epochs 3\u201310) in every configuration, and hard InfoNCE overfits faster (train loss falls to about 1.6 while validation scores drift down). Early stopping already copes with this.",
+    "rationale": "The primary's mean validation R@10 is 0.0335. That is about 6x chance (\u22480.0054) and beats CCA in all 4 folds (0.0179; +0.016 \u00b1 0.009). So the alignment is real but weak, which is expected when held-out patients contain many spots that look nearly identical. For prediction from histology the primary is tied with ridge (Pearson top-50: 0.148 vs 0.152; better in 2/4 folds). For clustering it is tied with the unimodal and CCA baselines. However, the hard_infonce comparison beats the primary on R@10 in every fold (0.0539/0.0211/0.0347/0.0510 vs 0.0492/0.0148/0.0319/0.0382). Its mean is 0.040 vs 0.034, with paired differences of +0.0028 to +0.0128 (mean +0.0066, SD \u22480.0044). The automated flag calls the hard_infonce gap 'within noise', but the paired, per-fold comparison is consistent. Every fold improves: a paired t of about 3.0 with 3 degrees of freedom, and a sign test of 4/4. That is moderate evidence, not conclusive. There is also a plausible reason for the gain. Soft InfoNCE spreads target probability across spots with similar expression (23% are near-twins). That rewards retrieving look-alikes instead of the exact paired spot, and exact pairing is what R@10 measures. Hard InfoNCE also leaves the regression term and every other setting unchanged, so it should not cost anything on prediction. Its training curves overfit faster: train loss falls to about 2.0 while validation loss stays around 8\u20139, and folds 2 and 3 peak early (epochs 7 and 3). Early stopping on the retrieval score already handles this, and the selected checkpoints still beat the primary's. Switching needs no extra compute and carries no risk of a regression.",
     "alternatives_rejected": [
       {
-        "option": "modify_primary: switch to infonce and add regularisation (dropout 0.3, weight_decay 0.01) and/or patch_context 2.0",
-        "reason": "Untested combined changes. Four folds at up to 180 s each would use about 720 of the 900 s left, and the gain is unclear. Early stopping already picks epochs before the drift, so extra regularisation may not raise the best-epoch score."
+        "option": "modify_primary to combine hard InfoNCE with patch_context 2.0 (loss.soft_infonce.weight=0, loss.infonce.weight=1, modalities.image.patch_context=2.0)",
+        "reason": "patch_context_2x also beats the primary in 4/4 folds (+0.0048 on average), and the two changes are independent, so combining them might reach about 0.045. But the revision is kept if it beats the original primary (0.0335), not hard_infonce (0.040). A combined run scoring between those two values would be kept and leave us worse off than a plain switch. It would also use 720 of the remaining 900 seconds for a gain about the size of the fold-to-fold noise."
       },
       {
         "option": "switch_primary to patch_context_2x",
-        "reason": "It was also better in 4/4 folds, but by only +0.0025 vs +0.0067 for hard_infonce."
+        "reason": "Its gain over the primary is smaller and less consistent (+0.0048 on average) than hard_infonce's (+0.0066)."
       },
       {
-        "option": "none",
-        "reason": "A comparison was better in every fold at no extra cost, so keeping the weaker loss is not justified."
+        "option": "Increase the regression loss weight to beat ridge on prediction Pearson",
+        "reason": "The gap to ridge is -0.004 \u00b1 0.023 with a split 2/4 folds, which is noise. Prediction is also not the primary metric, so the change could only be judged by its effect on retrieval."
       },
       {
-        "option": "raise loss.cross_modal_regression.weight to beat ridge",
-        "reason": "The gap to ridge is -0.002 and changes sign across folds, so it is noise. The primary metric is retrieval."
+        "option": "More regularisation (higher dropout or weight decay) against the early peaks",
+        "reason": "Early stopping already picks the best checkpoint, and the early peaks are mostly in the hard patient folds (fold 2). Any gain would be small and uncertain compared with the effect of the loss choice that has already been measured."
       }
     ],
     "evidence": {
-      "expected_effect": "Validation retrieval_mean_recall_at_10 should rise from about 0.0335 to about 0.040, roughly 7x chance. This is uncertain: the gain is small in absolute terms and rests on 4 folds. Prediction Pearson against ridge is not reported for hard_infonce. It will probably stay near ridge (\u22480.15), but it should be checked on the test data.",
+      "expected_effect": "Mean validation retrieval_mean_recall_at_10 should rise from 0.0335 to about 0.040 (roughly +20% relative, about 7x chance), with every fold improving. Prediction Pearson should stay roughly the same as ridge, because the regression term is unchanged. The gain is modest: on held-out patients it could shrink to about +0.003.",
       "source": "llm"
     },
     "source": "critic"
@@ -697,20 +667,20 @@
     "step": "critic",
     "decision": "keep the revision?",
     "chosen": "kept",
-    "rationale": "Validation retrieval_mean_recall_at_10: revised 0.0403 vs original 0.0335 (difference +0.0068; revised better in 4 of 4 folds). Kept: the primary metric improved.",
+    "rationale": "Validation retrieval_mean_recall_at_10: revised 0.0402 vs original 0.0335 (difference +0.0066; revised better in 4 of 4 folds). Kept: the primary metric improved.",
     "alternatives_rejected": [],
     "evidence": {
       "original": [
-        0.0478,
-        0.016,
-        0.0306,
-        0.0398
+        0.0492,
+        0.0148,
+        0.0319,
+        0.0382
       ],
       "revised": [
-        0.0521,
-        0.0201,
-        0.039,
-        0.0499
+        0.0539,
+        0.0211,
+        0.0347,
+        0.051
       ]
     },
     "source": "critic"
@@ -718,15 +688,15 @@
   {
     "step": "evaluation",
     "decision": "held-out test result",
-    "chosen": "retrieval_mean_recall_at_10 0.0250",
+    "chosen": "retrieval_mean_recall_at_10 0.0244",
     "rationale": "Test data were scored once, after the critic, for 'hard_infonce' and every baseline (4 fold(s)).",
     "alternatives_rejected": [],
     "evidence": {
       "per_fold": [
-        0.022141959798994977,
-        0.023869699522606008,
-        0.02617801047120419,
-        0.027793946449359723
+        0.02245603015075377,
+        0.021763549564729007,
+        0.026905177428737638,
+        0.026338766006984867
       ]
     },
     "source": "system"
@@ -735,10 +705,10 @@
     "step": "writer",
     "decision": "report prose",
     "chosen": "LLM (claude-opus-5-5)",
-    "rationale": "178 numbers in the prose checked against the computed outputs; 0 not found.",
+    "rationale": "217 numbers in the prose checked against the computed outputs; 0 not found.",
     "alternatives_rejected": [],
     "evidence": {
-      "n_checked": 178,
+      "n_checked": 217,
       "n_unmatched": 0
     },
     "source": "system"

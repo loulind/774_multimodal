@@ -236,3 +236,18 @@ def test_random_split_and_subsample_keep_groups():
     assert len(used) <= 130 and obs["patient"].iloc[used].nunique() == 8
     folds, _ = make_folds(obs, np.ones(len(obs), bool), SplitSpec(strategy="random"), 0)
     assert abs(len(folds[0].test) - 80) <= 2
+
+
+def test_pre_aligned_pair_gets_residual_heads_and_validator_guards_them():
+    p, log = plan_for(image_text_profile(), R2)
+    encs = [m.encoder for m in p.primary.modalities]
+    assert set(encs) == {"biomedclip_image", "biomedclip_text"}
+    assert p.primary.head.residual and p.primary.head.embed_dim == 512
+    assert all(c.head.residual for c in p.configs)                       # comparisons inherit it
+    assert log.by_step("hyperparameters")[-1].decision == "head initialisation"
+    spatial, _ = plan_for(spatial_profile(), R1)
+    assert not spatial.primary.head.residual                            # phikon + MLP: no aligned pair
+    bad = spatial.model_copy(deep=True)
+    bad.primary.head.residual = True
+    checked = validate(bad, spatial_profile(), MPS)
+    assert not checked.plan.primary.head.residual and any("residual" in r for r in checked.repairs)

@@ -102,12 +102,13 @@
     "embed_dim": 256,
     "hidden_dim": 512,
     "n_layers": 2,
-    "dropout": 0.1
+    "dropout": 0.2,
+    "residual": false
    },
    "training": {
     "batch_size": 512,
     "lr": 0.001,
-    "weight_decay": 0.0001,
+    "weight_decay": 0.001,
     "max_epochs": 300,
     "patience": 15,
     "temperature_init": 0.07,
@@ -116,7 +117,7 @@
     "finetune_lr": 0.00001,
     "train_seconds": 180.0
    },
-   "rationale": "Frozen phikon (best screening on recall@10, ridge R2 and probe F1) + MLP on 100 expression PCs; soft InfoNCE because 23% of expression spots have near-twins; joint regression head for image->expression prediction."
+   "rationale": "Frozen phikon (best on all three screening metrics) + MLP on 100 PCs of 2,000 HVGs; soft InfoNCE for 23% near-twin expression spots; joint image→expression regression head; slightly stronger regularisation because each fold trains on only 5 patients and patient explains 77% of expression variance."
   },
   {
    "name": "hard_infonce",
@@ -169,12 +170,13 @@
     "embed_dim": 256,
     "hidden_dim": 512,
     "n_layers": 2,
-    "dropout": 0.1
+    "dropout": 0.2,
+    "residual": false
    },
    "training": {
     "batch_size": 512,
     "lr": 0.001,
-    "weight_decay": 0.0001,
+    "weight_decay": 0.001,
     "max_epochs": 300,
     "patience": 15,
     "temperature_init": 0.07,
@@ -183,7 +185,7 @@
     "finetune_lr": 0.00001,
     "train_seconds": 135.0
    },
-   "rationale": "Tests the soft-target decision (near-twin fraction 0.232)."
+   "rationale": "Tests the soft-target decision (near_twin_fraction 0.232); identical to primary otherwise."
   },
   {
    "name": "patch_context_2x",
@@ -236,12 +238,13 @@
     "embed_dim": 256,
     "hidden_dim": 512,
     "n_layers": 2,
-    "dropout": 0.1
+    "dropout": 0.2,
+    "residual": false
    },
    "training": {
     "batch_size": 512,
     "lr": 0.001,
-    "weight_decay": 0.0001,
+    "weight_decay": 0.001,
     "max_epochs": 300,
     "patience": 15,
     "temperature_init": 0.07,
@@ -250,7 +253,7 @@
     "finetune_lr": 0.00001,
     "train_seconds": 135.0
    },
-   "rationale": "Tests the patch-size decision: spot spacing is 1.88x the spot diameter, so a 2x patch adds surrounding tissue context up to about the neighbouring spots without overlapping their centres."
+   "rationale": "Tests the patch-size decision: 2 x 145 px = 290 px, about the centre-to-centre spacing (273 px), so it adds surrounding tissue context without reaching far into neighbouring spots."
   }
  ],
  "evaluation": {
@@ -289,6 +292,6 @@
   "cross_modal_prediction",
   "spatial_maps"
  ],
- "rationale": "Contrastive alignment of frozen phikon image features and an MLP on expression PCs, with a joint image->expression regression head. Evaluation uses grouped 4-fold CV over 8 patients, against CCA, ridge, unimodal, fusion and chance baselines.",
+ "rationale": "Frozen-phikon / expression-MLP contrastive alignment with a joint regression head, under patient-grouped 4-fold CV. Two comparisons test the soft-target loss and the patch context. Baselines are CCA, ridge, unimodal, fusion and chance. The budget is 4x(180+135+135) + 180 + 4x180 = 2700 s, exactly the total allowed.",
  "source": "llm"
 }

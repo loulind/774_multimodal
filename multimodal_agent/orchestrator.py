@@ -286,7 +286,9 @@ class Agent:
                      f"best epoch {r['best_epoch']} of {r['epochs_run']}" if iterative else r["stopped_because"],
                      (f"Stopped: {r['stopped_because']}. " if iterative else "") +
                      f"Validation {r['selection_metric']} {r['best_val_score']:.4f}"
-                     + ("; the best epoch's weights are kept." if iterative else "."), [],
+                     + ("." if not iterative else
+                        "; no epoch beat the untrained starting point, which is kept." if r["best_epoch"] == 0 else
+                        "; the best epoch's weights are kept."), [],
                      {"n_trainable_parameters": r["n_trainable_parameters"]}, source="system")
         return rec
 

@@ -1,0 +1,217 @@
+{
+ "primary": {
+  "role": "final",
+  "strategy": "contrastive_alignment",
+  "fusion": "joint",
+  "modalities": [
+   {
+    "modality": "image",
+    "encoder": "biomedclip_image",
+    "regime": "frozen",
+    "trainable_blocks": 0,
+    "encoder_dim": 512
+   },
+   {
+    "modality": "text",
+    "encoder": "biomedclip_text",
+    "regime": "frozen",
+    "trainable_blocks": 0,
+    "encoder_dim": 512
+   }
+  ],
+  "losses": {
+   "infonce": 1.0,
+   "supervised_ce": 0.5
+  },
+  "head": {
+   "embed_dim": 512,
+   "hidden_dim": 512,
+   "n_layers": 2,
+   "dropout": 0.1,
+   "residual": true
+  },
+  "training": {
+   "batch_size": 512,
+   "lr": 0.001,
+   "weight_decay": 0.0001,
+   "max_epochs": 300,
+   "patience": 15,
+   "temperature_init": 0.07,
+   "learnable_temperature": true,
+   "soft_target_temperature": 0.1,
+   "finetune_lr": 1e-05,
+   "train_seconds": 180.0
+  },
+  "folds": [
+   {
+    "fold": "predefined",
+    "n_trainable_parameters": 1055751,
+    "best_epoch": 0,
+    "epochs_run": 15,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.8707
+   }
+  ]
+ },
+ "partial_finetune": {
+  "role": "comparison",
+  "strategy": "contrastive_alignment",
+  "fusion": "joint",
+  "modalities": [
+   {
+    "modality": "image",
+    "encoder": "biomedclip_image",
+    "regime": "partial_finetune",
+    "trainable_blocks": 2,
+    "encoder_dim": 512
+   },
+   {
+    "modality": "text",
+    "encoder": "biomedclip_text",
+    "regime": "partial_finetune",
+    "trainable_blocks": 2,
+    "encoder_dim": 512
+   }
+  ],
+  "losses": {
+   "infonce": 1.0,
+   "supervised_ce": 0.5
+  },
+  "head": {
+   "embed_dim": 512,
+   "hidden_dim": 512,
+   "n_layers": 2,
+   "dropout": 0.1,
+   "residual": true
+  },
+  "training": {
+   "batch_size": 128,
+   "lr": 0.001,
+   "weight_decay": 0.0001,
+   "max_epochs": 5,
+   "patience": 2,
+   "temperature_init": 0.07,
+   "learnable_temperature": true,
+   "soft_target_temperature": 0.1,
+   "finetune_lr": 1e-05,
+   "train_seconds": 1200.0
+  },
+  "folds": [
+   {
+    "fold": "predefined",
+    "n_trainable_parameters": 30621191,
+    "best_epoch": 0,
+    "epochs_run": 2,
+    "stopped_because": "no validation improvement for 2 epochs",
+    "best_val_score": 0.8707
+   }
+  ]
+ },
+ "contrastive_only": {
+  "role": "comparison",
+  "strategy": "contrastive_alignment",
+  "fusion": "joint",
+  "modalities": [
+   {
+    "modality": "image",
+    "encoder": "biomedclip_image",
+    "regime": "frozen",
+    "trainable_blocks": 0,
+    "encoder_dim": 512
+   },
+   {
+    "modality": "text",
+    "encoder": "biomedclip_text",
+    "regime": "frozen",
+    "trainable_blocks": 0,
+    "encoder_dim": 512
+   }
+  ],
+  "losses": {
+   "infonce": 1.0
+  },
+  "head": {
+   "embed_dim": 512,
+   "hidden_dim": 512,
+   "n_layers": 2,
+   "dropout": 0.1,
+   "residual": true
+  },
+  "training": {
+   "batch_size": 512,
+   "lr": 0.001,
+   "weight_decay": 0.0001,
+   "max_epochs": 300,
+   "patience": 15,
+   "temperature_init": 0.07,
+   "learnable_temperature": true,
+   "soft_target_temperature": 0.1,
+   "finetune_lr": 1e-05,
+   "train_seconds": 180.0
+  },
+  "folds": [
+   {
+    "fold": "predefined",
+    "n_trainable_parameters": 1052673,
+    "best_epoch": 0,
+    "epochs_run": 15,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.8707
+   }
+  ]
+ },
+ "primary_revised": {
+  "role": "primary",
+  "strategy": "contrastive_alignment",
+  "fusion": "joint",
+  "modalities": [
+   {
+    "modality": "image",
+    "encoder": "biomedclip_image",
+    "regime": "frozen",
+    "trainable_blocks": 0,
+    "encoder_dim": 512
+   },
+   {
+    "modality": "text",
+    "encoder": "biomedclip_text",
+    "regime": "frozen",
+    "trainable_blocks": 0,
+    "encoder_dim": 512
+   }
+  ],
+  "losses": {
+   "infonce": 1.0,
+   "supervised_ce": 0.5
+  },
+  "head": {
+   "embed_dim": 512,
+   "hidden_dim": 512,
+   "n_layers": 2,
+   "dropout": 0.1,
+   "residual": true
+  },
+  "training": {
+   "batch_size": 512,
+   "lr": 3e-05,
+   "weight_decay": 0.01,
+   "max_epochs": 300,
+   "patience": 15,
+   "temperature_init": 0.07,
+   "learnable_temperature": true,
+   "soft_target_temperature": 0.1,
+   "finetune_lr": 1e-05,
+   "train_seconds": 180.0
+  },
+  "folds": [
+   {
+    "fold": "predefined",
+    "n_trainable_parameters": 1055751,
+    "best_epoch": 0,
+    "epochs_run": 15,
+    "stopped_because": "no validation improvement for 15 epochs",
+    "best_val_score": 0.8707
+   }
+  ]
+ }
+}

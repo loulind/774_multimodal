@@ -1,0 +1,1350 @@
+{
+ "model_requested": "claude-opus-5-5",
+ "calls": [
+  {
+   "key": "planner_7bb880b2a4dcf04e.json",
+   "role": "planner",
+   "sequence": 0,
+   "backend": "claude_cli",
+   "model_requested": "claude-opus-5-5",
+   "model_used": "claude-opus-5-5",
+   "seconds": 49.91510899999412,
+   "cost_usd": 0.271988,
+   "usage": {
+    "input_tokens": 2,
+    "output_tokens": 5469,
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 20325,
+    "stop_reason": "tool_use",
+    "models": [
+     "claude-opus-5-5"
+    ]
+   },
+   "structured": true,
+   "cached": false,
+   "note": "",
+   "response_chars": 9650,
+   "effort": "high",
+   "max_output_tokens": 16000,
+   "budget_usd_given": 3.0,
+   "system": "You are the planning component of an automated multimodal representation-learning agent used in biomedical research. Given a dataset with two or more modalities (for example images, text, molecular count matrices, tables) and a free-text objective, you decide **how to learn a joint representation**:\n- the train/validation/test split;\n- the strategy (contrastive alignment, supervised fusion, self-supervised, or linear alignment);\n- the encoder for each modality, and whether its backbone stays frozen or is partly fine-tuned;\n- the preprocessing;\n- the losses and hyperparameters;\n- up to two comparison configurations;\n- the evaluation (one primary metric, the baselines) and the downstream analyses.\n\nDeterministic Python code has already profiled the data and screened candidate encoders empirically. It will validate your plan against hard guardrails, execute it within a compute budget, evaluate it on held-out data against baselines, and report the results. You never see raw data, only the profile.\n\n## How to decide\n\n**Ground every choice in the evidence.** It must follow from the profile numbers, the screening scores, the objective and the compute budget. The dataset is anonymised. Never rely on knowledge of a named dataset or cohort; reason only from the measurements given.\n\n**Split.** Held-out data must be independent of training data.\n- When samples are nested in groups (patients, slides, articles), keep each group within one split. Correlated neighbours or shared group effects otherwise leak information and inflate scores.\n- Use a predefined split when the data provide one.\n- Cross-validate over groups when there are enough groups.\n\n**Strategy.**\n- Contrastive alignment needs enough pairs to supply informative negatives. With few pairs, linear alignment (CCA) is the lower-variance choice.\n- Supervised fusion suits a classification-only objective.\n- Labels that the objective asks you to predict can enter a supervised term next to the contrastive one. Labels requested only for evaluation must not be trained on.\n\n**Encoders.**\n- Prefer the encoder that screened best on the metric relevant to the objective, unless the screening table gives a clear reason not to (for example, near-identical scores and a much cheaper encoder).\n- Domain-specific encoders are candidates, not defaults; generic encoders remain eligible.\n- A pre-aligned dual encoder (an image tower and a text tower trained together) allows a zero-shot baseline.\n- If a pretrained model's pretraining corpus may overlap the evaluation data, say so: its zero-shot scores are then optimistic.\n\n**Head initialisation.** When the two encoders form a pre-aligned dual encoder, residual heads (`head.residual`: the pretrained embedding plus a learned correction that starts at zero) begin training from the zero-shot solution. Randomly initialised heads discard that alignment and must relearn it from far fewer pairs.\n\n**Frozen or fine-tuned.**\n- Frozen backbones with small projection heads have far fewer trainable parameters and are the low-variance choice when pairs number in the thousands.\n- Partial fine-tuning of the last blocks needs many pairs, a GPU and enough time for several epochs within the per-fit budget.\n\n**Losses.**\n- Symmetric InfoNCE learns a shared space for retrieval.\n- Soft-target InfoNCE suits a partner modality with many near-identical samples (high near-twin or near-duplicate fraction), so look-alike samples are not treated as negatives.\n- A regression head serves an objective that asks to predict one modality from another.\n- A supervised cross-entropy term serves an objective that asks for classification by labels.\n\n**Preprocessing.**\n- Use colour normalisation when between-group colour variation is large.\n- Choose the patch size relative to the measured structure size.\n- Set the text truncation length from the token-length distribution.\n- Select variable features for count matrices, and apply PCA when the number of samples per feature is small.\n\n**Hyperparameters.** Size them to the number of training pairs and the time budget. Small data favour fewer parameters, more regularisation and early stopping on validation data.\n\n**Comparisons.** Use at most two comparison configurations. Each should test the decision you are least sure of; it is not a variation for its own sake.\n\n**Evaluation.**\n- Take the primary metric from the objective's first measurable task.\n- Compare against the simplest credible alternatives: each modality alone, linear alignment (CCA) or ridge regression, fusion of unimodal features, and zero-shot when available.\n\n## The proposal you are given\n\nA rule-based planner has produced a complete proposal, with its reasoning. Treat it as a strong baseline written by a careful statistician, not as an instruction. You may adopt, modify or reject any part of it. For **every** element you change, record a decision that explains why and cites profile or screening numbers. If you agree with an element, you need not repeat its rationale.\n\n## Output\n\nReturn a single JSON object with exactly these keys:\n\n```json\n{\n  \"plan\": { \"... same structure as the proposal's plan ...\" },\n  \"decisions\": [\n    {\"step\": \"split|strategy|encoder|regime|preprocessing|losses|hyperparameters|comparison|evaluation|downstream|objective\",\n     \"decision\": \"what was decided\",\n     \"chosen\": \"the choice\",\n     \"rationale\": \"why, citing profile or screening numbers\",\n     \"alternatives_rejected\": [{\"option\": \"...\", \"reason\": \"...\"}]}\n  ]\n}\n```\n\nRules for `plan`:\n- **Names.** Encoders, losses, strategies, metrics, baselines and downstream analyses must come from the allowed lists given. Hyperparameters must lie in the allowed ranges.\n- **Configurations.**\n  - At most 3 configurations, exactly one with role `\"primary\"`.\n  - Every configuration encodes exactly the modalities in `task.pair`.\n  - Configuration names must be unique.\n- **Compute.**\n  - `training.train_seconds` must not exceed the per-fit budget (the fine-tuning budget for a fine-tuning configuration).\n  - Across all folds, the total must leave room for a final refit and one critic revision.\n- **Task.**\n  - Keep `task.raw_objective` exactly as given.\n  - You may correct the parsed task (its tasks, pair, prediction direction or label column) if the parser misread the objective, and you must say so in a decision with step `\"objective\"`.\n",
+   "user": "Plan the multimodal representation-learning workflow for this dataset and objective.\n\n{\n \"objective\": \"Learn a joint image\\u2013caption embedding for image\\u2013text retrieval and imaging-modality classification.\",\n \"parsed_task\": {\n  \"raw_objective\": \"Learn a joint image\\u2013caption embedding for image\\u2013text retrieval and imaging-modality classification.\",\n  \"tasks\": [\n   \"joint_embedding\",\n   \"retrieval\",\n   \"classification\"\n  ],\n  \"primary_task\": \"retrieval\",\n  \"pair\": [\n   \"image\",\n   \"text\"\n  ],\n  \"prediction\": null,\n  \"label_column\": \"modality\",\n  \"label_evidence\": \"the objective names column 'modality'\",\n  \"modality_mentions\": {\n   \"image\": [\n    \"image\",\n    \"image\",\n    \"imaging\"\n   ],\n   \"text\": [\n    \"caption\",\n    \"text\"\n   ]\n  },\n  \"evidence\": {\n   \"retrieval\": [\n    \"retrieval\"\n   ],\n   \"classification\": [\n    \"classification\"\n   ],\n   \"joint_embedding\": [\n    \"joint image-caption embedding\"\n   ]\n  }\n },\n \"data_profile\": {\n  \"format\": \"table\",\n  \"n_samples\": 27000,\n  \"modalities\": [\n   {\n    \"name\": \"image\",\n    \"kind\": \"image\",\n    \"n_present\": 27000,\n    \"missing_fraction\": 0.0,\n    \"source\": \"column 'image_path'\",\n    \"image\": {\n     \"source\": \"files\",\n     \"n_sampled\": 240,\n     \"width_median\": 305.0,\n     \"height_median\": 256.0,\n     \"width_range\": [\n      119.0,\n      537.0\n     ],\n     \"spot_diameter_px_median\": null,\n     \"grayscale_fraction\": 0.7041666666666667,\n     \"mean_rgb\": [\n      83.2,\n      84.2,\n      84.4\n     ],\n     \"saturation_mean\": 0.06944258437980201,\n     \"light_background_fraction\": 0.06209299803287701,\n     \"dark_background_fraction\": 0.2909816044473307,\n     \"stain_hue_fraction\": 0.03354566658452133,\n     \"sharpness_median\": 1667.7791001403216,\n     \"near_duplicate_fraction\": 0.0,\n     \"colour_between_group_share\": null,\n     \"domain_hint\": \"greyscale_imaging\",\n     \"domain_evidence\": \"70% of sampled images are greyscale; 3% of pixels with a stain hue\"\n    },\n    \"text\": null,\n    \"matrix\": null,\n    \"tabular\": null,\n    \"spatial\": null\n   },\n   {\n    \"name\": \"text\",\n    \"kind\": \"text\",\n    \"n_present\": 26999,\n    \"missing_fraction\": 3.703703703705763e-05,\n    \"source\": \"column 'caption'\",\n    \"image\": null,\n    \"text\": {\n     \"n_sampled\": 26999,\n     \"words_median\": 17.0,\n     \"words_p95\": 49.0,\n     \"chars_median\": 119.0,\n     \"vocabulary_size\": 17825,\n     \"duplicate_fraction\": 0.0050001851920441496,\n     \"near_duplicate_fraction\": 0.009963331975258343,\n     \"fraction_over_60_words\": 0.0255565020926701\n    },\n    \"matrix\": null,\n    \"tabular\": null,\n    \"spatial\": null\n   }\n  ],\n  \"pairing\": {\n   \"present\": {\n    \"image\": 27000,\n    \"text\": 26999\n   },\n   \"pairs\": {\n    \"image|text\": 26999\n   },\n   \"n_all_present\": 26999\n  },\n  \"roles\": [\n   {\n    \"column\": \"image_path\",\n    \"role\": \"image_path\",\n    \"evidence\": \"values are paths to existing image files\"\n   },\n   {\n    \"column\": \"caption\",\n    \"role\": \"text\",\n    \"evidence\": \"free text: median 17 words, 100% distinct\"\n   },\n   {\n    \"column\": \"split\",\n    \"role\": \"split\",\n    \"evidence\": \"values ['test', 'train', 'valid'] are split names\"\n   },\n   {\n    \"column\": \"modality\",\n    \"role\": \"label\",\n    \"evidence\": \"6 classes; name suggests an outcome\"\n   },\n   {\n    \"column\": \"cuis\",\n    \"role\": \"multilabel\",\n    \"evidence\": \"90% of values hold several ';'-separated codes; 2.1% of codes are distinct\"\n   },\n   {\n    \"column\": \"concepts\",\n    \"role\": \"multilabel\",\n    \"evidence\": \"90% of values hold several ';'-separated codes; 2.1% of codes are distinct\"\n   },\n   {\n    \"column\": \"article\",\n    \"role\": \"group\",\n    \"evidence\": \"21341 levels; name suggests a dependence unit\"\n   }\n  ],\n  \"labels\": [\n   {\n    \"column\": \"modality\",\n    \"n_classes\": 6,\n    \"class_counts\": {\n     \"X-Ray Computed Tomography\": 9387,\n     \"Plain x-ray\": 7449,\n     \"Magnetic Resonance Imaging\": 4275,\n     \"Ultrasonography\": 3882,\n     \"angiogram\": 1616,\n     \"Positron-Emission Tomography\": 147\n    },\n    \"imbalance_ratio\": 63.857142857142854,\n    \"minority_class\": \"Positron-Emission Tomography\",\n    \"n_labelled\": 26756,\n    \"labelled_fraction\": 0.9909629629629629,\n    \"labelled_groups\": 21164,\n    \"n_groups\": 21341\n   }\n  ],\n  \"multilabel_columns\": [\n   \"cuis\",\n   \"concepts\"\n  ],\n  \"groups\": [\n   {\n    \"column\": \"article\",\n    \"role\": \"group\",\n    \"n_levels\": 21341,\n    \"size_min\": 1,\n    \"size_median\": 1.0,\n    \"size_max\": 10,\n    \"nested_in\": null,\n    \"split_overlap\": {\n     \"val_in_train\": 0.0,\n     \"test_in_train\": 0.0,\n     \"test_in_val\": 0.187\n    }\n   }\n  ],\n  \"cv_group\": \"article\",\n  \"split\": {\n   \"column\": \"split\",\n   \"counts\": {\n    \"train\": 20000,\n    \"val\": 2000,\n    \"test\": 5000\n   }\n  },\n  \"notes\": []\n },\n \"encoder_screening\": {\n  \"metric\": \"alignment_recall_at_10\",\n  \"n_train\": 2000,\n  \"n_val\": 500,\n  \"rows\": [\n   {\n    \"image\": \"biomedclip_image\",\n    \"text\": \"biomedclip_text\",\n    \"cca_recall_at_10\": 0.917,\n    \"zero_shot_recall_at_10\": 0.966,\n    \"alignment_recall_at_10\": 0.966,\n    \"probe_macro_f1\": 0.9337771756310538\n   },\n   {\n    \"image\": \"biomedclip_image\",\n    \"text\": \"pubmedbert\",\n    \"cca_recall_at_10\": 0.599,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.599,\n    \"probe_macro_f1\": 0.9337771756310538\n   },\n   {\n    \"image\": \"biomedclip_image\",\n    \"text\": \"clip_b16_text\",\n    \"cca_recall_at_10\": 0.595,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.595,\n    \"probe_macro_f1\": 0.9337771756310538\n   },\n   {\n    \"image\": \"biomedclip_image\",\n    \"text\": \"minilm\",\n    \"cca_recall_at_10\": 0.55,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.55,\n    \"probe_macro_f1\": 0.9337771756310538\n   },\n   {\n    \"image\": \"dinov2_base\",\n    \"text\": \"biomedclip_text\",\n    \"cca_recall_at_10\": 0.511,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.511,\n    \"probe_macro_f1\": 0.9140782240700975\n   },\n   {\n    \"image\": \"dinov2_base\",\n    \"text\": \"pubmedbert\",\n    \"cca_recall_at_10\": 0.328,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.328,\n    \"probe_macro_f1\": 0.9140782240700975\n   },\n   {\n    \"image\": \"dinov2_base\",\n    \"text\": \"clip_b16_text\",\n    \"cca_recall_at_10\": 0.298,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.298,\n    \"probe_macro_f1\": 0.9140782240700975\n   },\n   {\n    \"image\": \"dinov2_base\",\n    \"text\": \"minilm\",\n    \"cca_recall_at_10\": 0.255,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.255,\n    \"probe_macro_f1\": 0.9140782240700975\n   },\n   {\n    \"image\": \"clip_b16_image\",\n    \"text\": \"biomedclip_text\",\n    \"cca_recall_at_10\": 0.579,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.579,\n    \"probe_macro_f1\": 0.915147995195753\n   },\n   {\n    \"image\": \"clip_b16_image\",\n    \"text\": \"pubmedbert\",\n    \"cca_recall_at_10\": 0.379,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.379,\n    \"probe_macro_f1\": 0.915147995195753\n   },\n   {\n    \"image\": \"clip_b16_image\",\n    \"text\": \"clip_b16_text\",\n    \"cca_recall_at_10\": 0.377,\n    \"zero_shot_recall_at_10\": 0.375,\n    \"alignment_recall_at_10\": 0.377,\n    \"probe_macro_f1\": 0.915147995195753\n   },\n   {\n    \"image\": \"clip_b16_image\",\n    \"text\": \"minilm\",\n    \"cca_recall_at_10\": 0.291,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.291,\n    \"probe_macro_f1\": 0.915147995195753\n   },\n   {\n    \"image\": \"resnet50\",\n    \"text\": \"biomedclip_text\",\n    \"cca_recall_at_10\": 0.443,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.443,\n    \"probe_macro_f1\": 0.8947035708192289\n   },\n   {\n    \"image\": \"resnet50\",\n    \"text\": \"pubmedbert\",\n    \"cca_recall_at_10\": 0.272,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.272,\n    \"probe_macro_f1\": 0.7270243615961608\n   },\n   {\n    \"image\": \"resnet50\",\n    \"text\": \"clip_b16_text\",\n    \"cca_recall_at_10\": 0.25,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.25,\n    \"probe_macro_f1\": 0.7270243615961608\n   },\n   {\n    \"image\": \"resnet50\",\n    \"text\": \"minilm\",\n    \"cca_recall_at_10\": 0.23299999999999998,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.23299999999999998,\n    \"probe_macro_f1\": 0.7270243615961608\n   }\n  ],\n  \"probe_macro_f1\": {\n   \"image:biomedclip_image\": 0.9337771756310538,\n   \"image:dinov2_base\": 0.9140782240700975,\n   \"image:clip_b16_image\": 0.915147995195753,\n   \"image:resnet50\": 0.7270243615961608,\n   \"text:biomedclip_text\": 0.8947035708192289,\n   \"text:pubmedbert\": 0.7054042221411306,\n   \"text:clip_b16_text\": 0.6994240260796475,\n   \"text:minilm\": 0.6864301710806254\n  },\n  \"normaliser\": null\n },\n \"compute_budget\": {\n  \"device\": \"mps\",\n  \"quick_mode\": false,\n  \"train_seconds_per_fit\": 180.0,\n  \"finetune_seconds_per_fit\": 1200.0,\n  \"total_train_seconds\": 2700.0,\n  \"max_epochs\": 300,\n  \"max_folds\": 4,\n  \"max_samples\": null,\n  \"total_rule\": \"n_folds x sum(train_seconds over configs) + primary refit + n_folds x primary (critic revision) <= total_train_seconds\"\n },\n \"encoder_library\": [\n  {\n   \"name\": \"phikon\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"stained_tissue\"\n   ],\n   \"dim\": 768,\n   \"max_tokens\": null,\n   \"partner\": null,\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"Owkin non-commercial\",\n   \"pretraining\": \"iBOT self-supervision on 40M TCGA histology tiles\"\n  },\n  {\n   \"name\": \"plip_image\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"stained_tissue\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": null,\n   \"partner\": \"plip_text\",\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"not stated (research use)\",\n   \"pretraining\": \"CLIP fine-tuned on OpenPath pathology image-text pairs\"\n  },\n  {\n   \"name\": \"plip_text\",\n   \"kinds\": [\n    \"text\"\n   ],\n   \"domains\": [\n    \"pathology_text\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": 77,\n   \"partner\": \"plip_image\",\n   \"finetunable\": false,\n   \"n_blocks\": null,\n   \"quick\": false,\n   \"license\": \"not stated (research use)\",\n   \"pretraining\": \"CLIP fine-tuned on OpenPath pathology image-text pairs\"\n  },\n  {\n   \"name\": \"biomedclip_image\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"greyscale_imaging\",\n    \"colour_other\",\n    \"stained_tissue\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": null,\n   \"partner\": \"biomedclip_text\",\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"MIT\",\n   \"pretraining\": \"PMC-15M: 15M figure-caption pairs from PubMed Central\"\n  },\n  {\n   \"name\": \"biomedclip_text\",\n   \"kinds\": [\n    \"text\"\n   ],\n   \"domains\": [\n    \"biomedical_text\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": 256,\n   \"partner\": \"biomedclip_image\",\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"MIT\",\n   \"pretraining\": \"PMC-15M: 15M figure-caption pairs from PubMed Central\"\n  },\n  {\n   \"name\": \"pubmedbert\",\n   \"kinds\": [\n    \"text\"\n   ],\n   \"domains\": [\n    \"biomedical_text\"\n   ],\n   \"dim\": 768,\n   \"max_tokens\": 512,\n   \"partner\": null,\n   \"finetunable\": false,\n   \"n_blocks\": null,\n   \"quick\": false,\n   \"license\": \"MIT\",\n   \"pretraining\": \"masked language modelling on PubMed abstracts and PMC full text\"\n  },\n  {\n   \"name\": \"clip_b16_image\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"generic\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": null,\n   \"partner\": \"clip_b16_text\",\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"MIT\",\n   \"pretraining\": \"CLIP on 400M web image-text pairs\"\n  },\n  {\n   \"name\": \"clip_b16_text\",\n   \"kinds\": [\n    \"text\"\n   ],\n   \"domains\": [\n    \"generic_text\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": 77,\n   \"partner\": \"clip_b16_image\",\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"MIT\",\n   \"pretraining\": \"CLIP on 400M web image-text pairs\"\n  },\n  {\n   \"name\": \"dinov2_base\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"generic\"\n   ],\n   \"dim\": 768,\n   \"max_tokens\": null,\n   \"partner\": null,\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": false,\n   \"license\": \"Apache-2.0\",\n   \"pretraining\": \"DINOv2 self-supervision on LVD-142M curated web images\"\n  },\n  {\n   \"name\": \"dinov2_small\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"generic\"\n   ],\n   \"dim\": 384,\n   \"max_tokens\": null,\n   \"partner\": null,\n   \"finetunable\": true,\n   \"n_blocks\": 12,\n   \"quick\": true,\n   \"license\": \"Apache-2.0\",\n   \"pretraining\": \"DINOv2 self-supervision on LVD-142M curated web images\"\n  },\n  {\n   \"name\": \"resnet50\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"generic\"\n   ],\n   \"dim\": 2048,\n   \"max_tokens\": null,\n   \"partner\": null,\n   \"finetunable\": false,\n   \"n_blocks\": null,\n   \"quick\": false,\n   \"license\": \"Apache-2.0\",\n   \"pretraining\": \"supervised ImageNet-1k\"\n  },\n  {\n   \"name\": \"resnet18\",\n   \"kinds\": [\n    \"image\"\n   ],\n   \"domains\": [\n    \"generic\"\n   ],\n   \"dim\": 512,\n   \"max_tokens\": null,\n   \"partner\": null,\n   \"finetunable\": false,\n   \"n_blocks\": null,\n   \"quick\": true,\n   \"license\": \"Apache-2.0\",\n   \"pretraining\": \"supervised ImageNet-1k\"\n  },\n  {\n   \"name\": \"minilm\",\n   \"kinds\": [\n    \"text\"\n   ],\n   \"domains\": [\n    \"generic_text\"\n   ],\n   \"dim\": 384,\n   \"max_tokens\": 256,\n   \"partner\": null,\n   \"finetunable\": false,\n   \"n_blocks\": null,\n   \"quick\": true,\n   \"license\": \"Apache-2.0\",\n   \"pretraining\": \"contrastive sentence-pair training on 1B web sentence pairs\"\n  },\n  {\n   \"name\": \"mlp\",\n   \"kinds\": [\n    \"matrix\",\n    \"tabular\"\n   ],\n   \"domains\": [\n    \"any\"\n   ],\n   \"dim\": 0,\n   \"max_tokens\": null,\n   \"partner\": null,\n   \"finetunable\": false,\n   \"n_blocks\": null,\n   \"quick\": false,\n   \"license\": \"n/a\",\n   \"pretraining\": \"none (trained from scratch)\"\n  }\n ],\n \"allowed\": {\n  \"encoders\": [\n   \"phikon\",\n   \"plip_image\",\n   \"plip_text\",\n   \"biomedclip_image\",\n   \"biomedclip_text\",\n   \"pubmedbert\",\n   \"clip_b16_image\",\n   \"clip_b16_text\",\n   \"dinov2_base\",\n   \"dinov2_small\",\n   \"resnet50\",\n   \"resnet18\",\n   \"minilm\",\n   \"mlp\"\n  ],\n  \"strategies\": [\n   \"contrastive_alignment\",\n   \"supervised_fusion\",\n   \"self_supervised\",\n   \"linear_alignment\"\n  ],\n  \"fusion\": [\n   \"joint\",\n   \"early\",\n   \"late\"\n  ],\n  \"regimes\": [\n   \"frozen\",\n   \"partial_finetune\",\n   \"from_scratch\"\n  ],\n  \"losses\": [\n   \"infonce\",\n   \"soft_infonce\",\n   \"supervised_ce\",\n   \"supcon\",\n   \"cross_modal_regression\",\n   \"reconstruction\",\n   \"ssl_simclr\",\n   \"masked_denoising\"\n  ],\n  \"primary_metrics\": [\n   \"retrieval_mean_recall_at_10\",\n   \"prediction_mean_pearson_top50\",\n   \"probe_macro_f1\",\n   \"clustering_ari\"\n  ],\n  \"metrics\": [\n   \"alignment_uniformity\",\n   \"clustering_ari_nmi\",\n   \"effective_rank\",\n   \"group_silhouette\",\n   \"knn_accuracy\",\n   \"linear_probe\",\n   \"modality_gap\",\n   \"prediction_pearson\",\n   \"retrieval_label_match_at_k\",\n   \"retrieval_recall_at_k\"\n  ],\n  \"baselines\": [\n   \"cca\",\n   \"chance\",\n   \"early_fusion\",\n   \"late_fusion\",\n   \"ridge\",\n   \"unimodal\",\n   \"zero_shot\"\n  ],\n  \"downstream\": [\n   \"retrieval_examples\",\n   \"cross_modal_prediction\",\n   \"classification\",\n   \"clustering\",\n   \"spatial_maps\"\n  ],\n  \"ranges\": {\n   \"head.embed_dim\": [\n    32,\n    1024\n   ],\n   \"head.hidden_dim\": [\n    64,\n    2048\n   ],\n   \"head.n_layers\": [\n    1,\n    4\n   ],\n   \"head.dropout\": [\n    0.0,\n    0.5\n   ],\n   \"training.batch_size\": [\n    16,\n    2048\n   ],\n   \"training.lr\": [\n    1e-06,\n    0.01\n   ],\n   \"training.weight_decay\": [\n    0.0,\n    0.1\n   ],\n   \"training.patience\": [\n    1,\n    50\n   ],\n   \"training.temperature_init\": [\n    0.01,\n    1.0\n   ],\n   \"training.soft_target_temperature\": [\n    0.01,\n    1.0\n   ],\n   \"training.finetune_lr\": [\n    1e-07,\n    0.0001\n   ]\n  },\n  \"loss_weight\": [\n   0.0,\n   10.0\n  ],\n  \"patch_context\": [\n   0.5,\n   3.0\n  ],\n  \"max_configs\": 3,\n  \"finetune_batch_size_max\": 256\n },\n \"proposal\": {\n  \"plan\": {\n   \"task\": {\n    \"raw_objective\": \"Learn a joint image\\u2013caption embedding for image\\u2013text retrieval and imaging-modality classification.\",\n    \"tasks\": [\n     \"joint_embedding\",\n     \"retrieval\",\n     \"classification\"\n    ],\n    \"primary_task\": \"retrieval\",\n    \"pair\": [\n     \"image\",\n     \"text\"\n    ],\n    \"prediction\": null,\n    \"label_column\": \"modality\",\n    \"label_evidence\": \"the objective names column 'modality'\",\n    \"modality_mentions\": {\n     \"image\": [\n      \"image\",\n      \"image\",\n      \"imaging\"\n     ],\n     \"text\": [\n      \"caption\",\n      \"text\"\n     ]\n    },\n    \"evidence\": {\n     \"retrieval\": [\n      \"retrieval\"\n     ],\n     \"classification\": [\n      \"classification\"\n     ],\n     \"joint_embedding\": [\n      \"joint image-caption embedding\"\n     ]\n    },\n    \"source\": \"heuristic\"\n   },\n   \"split\": {\n    \"strategy\": \"predefined\",\n    \"group_column\": \"article\",\n    \"n_folds\": 1,\n    \"val_fraction\": 0.1,\n    \"test_fraction\": 0.2,\n    \"stratify_column\": \"modality\"\n   },\n   \"configs\": [\n    {\n     \"name\": \"primary\",\n     \"role\": \"primary\",\n     \"strategy\": \"contrastive_alignment\",\n     \"fusion\": \"joint\",\n     \"modalities\": [\n      {\n       \"modality\": \"image\",\n       \"encoder\": \"biomedclip_image\",\n       \"regime\": \"frozen\",\n       \"trainable_blocks\": 0,\n       \"patch_context\": null,\n       \"colour_normalisation\": \"none\",\n       \"greyscale_to_rgb\": true,\n       \"augment\": false,\n       \"text_max_tokens\": null,\n       \"text_cleaning\": \"basic\",\n       \"n_variable_features\": null,\n       \"matrix_input\": null,\n       \"pca_components\": null\n      },\n      {\n       \"modality\": \"text\",\n       \"encoder\": \"biomedclip_text\",\n       \"regime\": \"frozen\",\n       \"trainable_blocks\": 0,\n       \"patch_context\": null,\n       \"colour_normalisation\": \"none\",\n       \"greyscale_to_rgb\": false,\n       \"augment\": false,\n       \"text_max_tokens\": 80,\n       \"text_cleaning\": \"basic\",\n       \"n_variable_features\": null,\n       \"matrix_input\": null,\n       \"pca_components\": null\n      }\n     ],\n     \"losses\": [\n      {\n       \"name\": \"infonce\",\n       \"weight\": 1.0\n      },\n      {\n       \"name\": \"supervised_ce\",\n       \"weight\": 0.5\n      }\n     ],\n     \"head\": {\n      \"embed_dim\": 512,\n      \"hidden_dim\": 512,\n      \"n_layers\": 2,\n      \"dropout\": 0.1,\n      \"residual\": true\n     },\n     \"training\": {\n      \"batch_size\": 512,\n      \"lr\": 0.001,\n      \"weight_decay\": 0.0001,\n      \"max_epochs\": 300,\n      \"patience\": 15,\n      \"temperature_init\": 0.07,\n      \"learnable_temperature\": true,\n      \"soft_target_temperature\": 0.1,\n      \"finetune_lr\": 1e-05,\n      \"train_seconds\": 180.0\n     },\n     \"rationale\": \"Rule-based choice; see the decision log.\"\n    },\n    {\n     \"name\": \"partial_finetune\",\n     \"role\": \"comparison\",\n     \"strategy\": \"contrastive_alignment\",\n     \"fusion\": \"joint\",\n     \"modalities\": [\n      {\n       \"modality\": \"image\",\n       \"encoder\": \"biomedclip_image\",\n       \"regime\": \"partial_finetune\",\n       \"trainable_blocks\": 2,\n       \"patch_context\": null,\n       \"colour_normalisation\": \"none\",\n       \"greyscale_to_rgb\": true,\n       \"augment\": true,\n       \"text_max_tokens\": null,\n       \"text_cleaning\": \"basic\",\n       \"n_variable_features\": null,\n       \"matrix_input\": null,\n       \"pca_components\": null\n      },\n      {\n       \"modality\": \"text\",\n       \"encoder\": \"biomedclip_text\",\n       \"regime\": \"partial_finetune\",\n       \"trainable_blocks\": 2,\n       \"patch_context\": null,\n       \"colour_normalisation\": \"none\",\n       \"greyscale_to_rgb\": false,\n       \"augment\": false,\n       \"text_max_tokens\": 80,\n       \"text_cleaning\": \"basic\",\n       \"n_variable_features\": null,\n       \"matrix_input\": null,\n       \"pca_components\": null\n      }\n     ],\n     \"losses\": [\n      {\n       \"name\": \"infonce\",\n       \"weight\": 1.0\n      },\n      {\n       \"name\": \"supervised_ce\",\n       \"weight\": 0.5\n      }\n     ],\n     \"head\": {\n      \"embed_dim\": 512,\n      \"hidden_dim\": 512,\n      \"n_layers\": 2,\n      \"dropout\": 0.1,\n      \"residual\": true\n     },\n     \"training\": {\n      \"batch_size\": 64,\n      \"lr\": 0.001,\n      \"weight_decay\": 0.0001,\n      \"max_epochs\": 5,\n      \"patience\": 2,\n      \"temperature_init\": 0.07,\n      \"learnable_temperature\": true,\n      \"soft_target_temperature\": 0.1,\n      \"finetune_lr\": 1e-05,\n      \"train_seconds\": 1200.0\n     },\n     \"rationale\": \"Tests the frozen-backbone decision: pre-aligned dual encoder (biomedclip_image + biomedclip_text), about 19,999 training pairs and ~889s for 2 epochs on mps.\"\n    },\n    {\n     \"name\": \"contrastive_only\",\n     \"role\": \"comparison\",\n     \"strategy\": \"contrastive_alignment\",\n     \"fusion\": \"joint\",\n     \"modalities\": [\n      {\n       \"modality\": \"image\",\n       \"encoder\": \"biomedclip_image\",\n       \"regime\": \"frozen\",\n       \"trainable_blocks\": 0,\n       \"patch_context\": null,\n       \"colour_normalisation\": \"none\",\n       \"greyscale_to_rgb\": true,\n       \"augment\": false,\n       \"text_max_tokens\": null,\n       \"text_cleaning\": \"basic\",\n       \"n_variable_features\": null,\n       \"matrix_input\": null,\n       \"pca_components\": null\n      },\n      {\n       \"modality\": \"text\",\n       \"encoder\": \"biomedclip_text\",\n       \"regime\": \"frozen\",\n       \"trainable_blocks\": 0,\n       \"patch_context\": null,\n       \"colour_normalisation\": \"none\",\n       \"greyscale_to_rgb\": false,\n       \"augment\": false,\n       \"text_max_tokens\": 80,\n       \"text_cleaning\": \"basic\",\n       \"n_variable_features\": null,\n       \"matrix_input\": null,\n       \"pca_components\": null\n      }\n     ],\n     \"losses\": [\n      {\n       \"name\": \"infonce\",\n       \"weight\": 1.0\n      }\n     ],\n     \"head\": {\n      \"embed_dim\": 512,\n      \"hidden_dim\": 512,\n      \"n_layers\": 2,\n      \"dropout\": 0.1,\n      \"residual\": true\n     },\n     \"training\": {\n      \"batch_size\": 512,\n      \"lr\": 0.001,\n      \"weight_decay\": 0.0001,\n      \"max_epochs\": 300,\n      \"patience\": 15,\n      \"temperature_init\": 0.07,\n      \"learnable_temperature\": true,\n      \"soft_target_temperature\": 0.1,\n      \"finetune_lr\": 1e-05,\n      \"train_seconds\": 180.0\n     },\n     \"rationale\": \"Tests whether the supervised term helps.\"\n    }\n   ],\n   \"evaluation\": {\n    \"primary_metric\": \"retrieval_mean_recall_at_10\",\n    \"metrics\": [\n     \"retrieval_recall_at_k\",\n     \"linear_probe\",\n     \"knn_accuracy\",\n     \"clustering_ari_nmi\",\n     \"retrieval_label_match_at_k\",\n     \"alignment_uniformity\",\n     \"modality_gap\",\n     \"effective_rank\"\n    ],\n    \"baselines\": [\n     \"unimodal\",\n     \"chance\",\n     \"cca\",\n     \"early_fusion\",\n     \"late_fusion\",\n     \"zero_shot\"\n    ],\n    \"label_column\": \"modality\",\n    \"group_column\": null,\n    \"retrieval_ks\": [\n     1,\n     5,\n     10\n    ],\n    \"prediction_genes\": 50\n   },\n   \"downstream\": [\n    \"retrieval_examples\",\n    \"classification\"\n   ],\n   \"rationale\": \"contrastive_alignment on image + text for joint_embedding, retrieval, classification\"\n  },\n  \"reasoning\": [\n   {\n    \"step\": \"split\",\n    \"decision\": \"how to split the data\",\n    \"chosen\": \"predefined split\",\n    \"rationale\": \"The data come with their own split (train 20,000, val 2,000, test 5,000); using it keeps results comparable with other work and keeps the test set unseen. Model selection uses validation only; test is scored once at the end. Note: 19% of test samples share a 'article' with a validation sample, so choices made on validation may flatter test results slightly.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"re-split by group\",\n      \"reason\": \"would break comparability with the published split\"\n     },\n     {\n      \"option\": \"random re-split\",\n      \"reason\": \"same, and ignores any grouping\"\n     }\n    ]\n   },\n   {\n    \"step\": \"strategy\",\n    \"decision\": \"integration strategy\",\n    \"chosen\": \"contrastive_alignment (CLIP-style)\",\n    \"rationale\": \"The objective needs a shared space (joint_embedding, retrieval) and there are about 19,999 training pairs. Contrastive alignment learns that space directly from the pairing: each sample's partner is its positive and the other samples in the batch its negatives (InfoNCE, a lower bound on the mutual information between modalities).\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"early fusion (concatenate features)\",\n      \"reason\": \"gives no cross-modal space: cannot retrieve or predict one modality from the other\"\n     },\n     {\n      \"option\": \"late fusion (combine per-modality predictions)\",\n      \"reason\": \"same; used as a baseline only\"\n     },\n     {\n      \"option\": \"supervised representation learning only\",\n      \"reason\": \"would ignore the pairing; used as an auxiliary loss instead\"\n     }\n    ]\n   },\n   {\n    \"step\": \"encoder\",\n    \"decision\": \"encoder for 'image'\",\n    \"chosen\": \"biomedclip_image\",\n    \"rationale\": \"Highest screening score among 4 candidates (alignment_recall_at_10 0.966 on held-out screening samples). Screened on 2000 training and 500 validation samples from separate groups.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"clip_b16_image\",\n      \"reason\": \"alignment_recall_at_10 0.579 < 0.966\"\n     },\n     {\n      \"option\": \"dinov2_base\",\n      \"reason\": \"alignment_recall_at_10 0.511 < 0.966\"\n     },\n     {\n      \"option\": \"resnet50\",\n      \"reason\": \"alignment_recall_at_10 0.443 < 0.966\"\n     }\n    ]\n   },\n   {\n    \"step\": \"preprocessing\",\n    \"decision\": \"'image' channels\",\n    \"chosen\": \"greyscale replicated to RGB\",\n    \"rationale\": \"70% of images are greyscale; pretrained encoders expect three channels, so luminance is copied to all three (no information added).\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"convert colour images to greyscale\",\n      \"reason\": \"would discard colour in the minority of colour images (overlays, Doppler)\"\n     }\n    ]\n   },\n   {\n    \"step\": \"encoder\",\n    \"decision\": \"encoder for 'text'\",\n    \"chosen\": \"biomedclip_text\",\n    \"rationale\": \"Highest screening score among 4 candidates (alignment_recall_at_10 0.966 on held-out screening samples). Screened on 2000 training and 500 validation samples from separate groups.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"pubmedbert\",\n      \"reason\": \"alignment_recall_at_10 0.599 < 0.966\"\n     },\n     {\n      \"option\": \"clip_b16_text\",\n      \"reason\": \"alignment_recall_at_10 0.595 < 0.966\"\n     },\n     {\n      \"option\": \"minilm\",\n      \"reason\": \"alignment_recall_at_10 0.550 < 0.966\"\n     }\n    ]\n   },\n   {\n    \"step\": \"preprocessing\",\n    \"decision\": \"'text' text length\",\n    \"chosen\": \"80 tokens\",\n    \"rationale\": \"95% of texts have <= 49 words (~80 tokens); capped at the encoder's context (256). Whitespace and Unicode are normalised.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"encoder maximum\",\n      \"reason\": \"pads most texts for no gain\"\n     }\n    ]\n   },\n   {\n    \"step\": \"loss\",\n    \"decision\": \"contrastive loss\",\n    \"chosen\": \"symmetric InfoNCE (CLIP)\",\n    \"rationale\": \"Near-duplicates are rare (max 1.0% <= 10%), so treating the other batch samples as negatives is sound.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"soft-target InfoNCE\",\n      \"reason\": \"adds a similarity model without a redundancy problem\"\n     }\n    ]\n   },\n   {\n    \"step\": \"loss\",\n    \"decision\": \"supervised term\",\n    \"chosen\": \"cross-entropy on 'modality', weight 0.5\",\n    \"rationale\": \"The objective asks for classification and 99% of samples carry 'modality' (6 classes): a supervised head on the joint embedding shapes it for that task while InfoNCE keeps the pairing.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"contrastive only\",\n      \"reason\": \"tested as a comparison\"\n     },\n     {\n      \"option\": \"supervised only\",\n      \"reason\": \"would ignore the pairing the retrieval task needs\"\n     }\n    ]\n   },\n   {\n    \"step\": \"hyperparameters\",\n    \"decision\": \"head and training\",\n    \"chosen\": \"embed 256, batch 512, lr 0.001, dropout 0.1\",\n    \"rationale\": \"About 19,999 training pairs: a 256-d joint space with 2-layer heads (512 hidden) is small relative to n; batch 512 gives 511 negatives per positive; early stopping on validation (patience 15) and a 180s cap per fit; temperature learned from 0.07.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"larger heads\",\n      \"reason\": \"more parameters than the data support\"\n     }\n    ]\n   },\n   {\n    \"step\": \"hyperparameters\",\n    \"decision\": \"head initialisation\",\n    \"chosen\": \"residual: identity at the start, 512-d\",\n    \"rationale\": \"biomedclip_image and biomedclip_text were pretrained together into one aligned space. Each head adds a learned correction (initialised at zero) to that space, so training starts from the pretrained (zero-shot) solution, and the starting point itself is a candidate when the best epoch is chosen on validation.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"randomly initialised heads\",\n      \"reason\": \"they discard the pretrained alignment and must relearn it from far fewer pairs than pretraining used\"\n     }\n    ]\n   },\n   {\n    \"step\": \"regime\",\n    \"decision\": \"frozen backbones or fine-tuning\",\n    \"chosen\": \"fine-tune as comparison\",\n    \"rationale\": \"Frozen pretrained backbones with small trainable projection heads: few trainable parameters for the number of pairs (low variance), features computed once. Partial fine-tuning of the last 2 blocks is run as a comparison: pre-aligned dual encoder (biomedclip_image + biomedclip_text), about 19,999 training pairs and ~889s for 2 epochs on mps.\",\n    \"alternatives_rejected\": [\n     {\n      \"option\": \"full fine-tuning\",\n      \"reason\": \"~86M parameters per tower for the available pairs; high variance and compute\"\n     }\n    ]\n   },\n   {\n    \"step\": \"comparison\",\n    \"decision\": \"comparison configuration 'partial_finetune'\",\n    \"chosen\": \"run\",\n    \"rationale\": \"Tests the frozen-backbone decision: pre-aligned dual encoder (biomedclip_image + biomedclip_text), about 19,999 training pairs and ~889s for 2 epochs on mps.\",\n    \"alternatives_rejected\": []\n   },\n   {\n    \"step\": \"comparison\",\n    \"decision\": \"comparison configuration 'contrastive_only'\",\n    \"chosen\": \"run\",\n    \"rationale\": \"Tests whether the supervised term helps.\",\n    \"alternatives_rejected\": []\n   },\n   {\n    \"step\": \"evaluation\",\n    \"decision\": \"primary metric\",\n    \"chosen\": \"retrieval_mean_recall_at_10\",\n    \"rationale\": \"First measurable task in the objective is 'retrieval'. Every metric is computed on held-out data and compared with unimodal features, linear alignment (CCA), zero-shot pretrained alignment and chance, to show whether integration helped.\",\n    \"alternatives_rejected\": []\n   },\n   {\n    \"step\": \"split\",\n    \"decision\": \"sample selection\",\n    \"chosen\": \"1 samples lack one of the paired modalities and are not used for alignment\",\n    \"rationale\": \"Recorded while drawing the folds.\",\n    \"alternatives_rejected\": []\n   }\n  ]\n }\n}",
+   "schema": {
+    "$defs": {
+     "Alternative": {
+      "properties": {
+       "option": {
+        "title": "Option",
+        "type": "string"
+       },
+       "reason": {
+        "title": "Reason",
+        "type": "string"
+       }
+      },
+      "required": [
+       "option",
+       "reason"
+      ],
+      "title": "Alternative",
+      "type": "object"
+     },
+     "ConfigSpec": {
+      "description": "One trained configuration: the primary, or a comparison that tests a decision.",
+      "properties": {
+       "name": {
+        "title": "Name",
+        "type": "string"
+       },
+       "role": {
+        "default": "primary",
+        "enum": [
+         "primary",
+         "comparison"
+        ],
+        "title": "Role",
+        "type": "string"
+       },
+       "strategy": {
+        "enum": [
+         "contrastive_alignment",
+         "supervised_fusion",
+         "self_supervised",
+         "linear_alignment"
+        ],
+        "title": "Strategy",
+        "type": "string"
+       },
+       "fusion": {
+        "default": "joint",
+        "enum": [
+         "joint",
+         "early",
+         "late"
+        ],
+        "title": "Fusion",
+        "type": "string"
+       },
+       "modalities": {
+        "items": {
+         "$ref": "#/$defs/ModalityPlan"
+        },
+        "title": "Modalities",
+        "type": "array"
+       },
+       "losses": {
+        "items": {
+         "$ref": "#/$defs/LossTerm"
+        },
+        "title": "Losses",
+        "type": "array"
+       },
+       "head": {
+        "$ref": "#/$defs/HeadSpec"
+       },
+       "training": {
+        "$ref": "#/$defs/TrainingSpec"
+       },
+       "rationale": {
+        "default": "",
+        "title": "Rationale",
+        "type": "string"
+       }
+      },
+      "required": [
+       "name",
+       "strategy",
+       "modalities",
+       "losses"
+      ],
+      "title": "ConfigSpec",
+      "type": "object"
+     },
+     "EvalSpec": {
+      "properties": {
+       "primary_metric": {
+        "enum": [
+         "retrieval_mean_recall_at_10",
+         "prediction_mean_pearson_top50",
+         "probe_macro_f1",
+         "clustering_ari"
+        ],
+        "title": "Primary Metric",
+        "type": "string"
+       },
+       "metrics": {
+        "items": {
+         "type": "string"
+        },
+        "title": "Metrics",
+        "type": "array"
+       },
+       "baselines": {
+        "items": {
+         "type": "string"
+        },
+        "title": "Baselines",
+        "type": "array"
+       },
+       "label_column": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Label Column"
+       },
+       "group_column": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Group Column"
+       },
+       "retrieval_ks": {
+        "items": {
+         "type": "integer"
+        },
+        "title": "Retrieval Ks",
+        "type": "array"
+       },
+       "prediction_genes": {
+        "default": 50,
+        "title": "Prediction Genes",
+        "type": "integer"
+       }
+      },
+      "required": [
+       "primary_metric",
+       "metrics",
+       "baselines"
+      ],
+      "title": "EvalSpec",
+      "type": "object"
+     },
+     "HeadSpec": {
+      "properties": {
+       "embed_dim": {
+        "default": 256,
+        "title": "Embed Dim",
+        "type": "integer"
+       },
+       "hidden_dim": {
+        "default": 512,
+        "title": "Hidden Dim",
+        "type": "integer"
+       },
+       "n_layers": {
+        "default": 2,
+        "title": "N Layers",
+        "type": "integer"
+       },
+       "dropout": {
+        "default": 0.1,
+        "title": "Dropout",
+        "type": "number"
+       },
+       "residual": {
+        "default": false,
+        "title": "Residual",
+        "type": "boolean"
+       }
+      },
+      "title": "HeadSpec",
+      "type": "object"
+     },
+     "LLMDecision": {
+      "properties": {
+       "step": {
+        "title": "Step",
+        "type": "string"
+       },
+       "decision": {
+        "title": "Decision",
+        "type": "string"
+       },
+       "chosen": {
+        "title": "Chosen",
+        "type": "string"
+       },
+       "rationale": {
+        "title": "Rationale",
+        "type": "string"
+       },
+       "alternatives_rejected": {
+        "items": {
+         "$ref": "#/$defs/Alternative"
+        },
+        "title": "Alternatives Rejected",
+        "type": "array"
+       }
+      },
+      "required": [
+       "step",
+       "decision",
+       "chosen",
+       "rationale"
+      ],
+      "title": "LLMDecision",
+      "type": "object"
+     },
+     "LossTerm": {
+      "properties": {
+       "name": {
+        "enum": [
+         "infonce",
+         "soft_infonce",
+         "supervised_ce",
+         "supcon",
+         "cross_modal_regression",
+         "reconstruction",
+         "ssl_simclr",
+         "masked_denoising"
+        ],
+        "title": "Name",
+        "type": "string"
+       },
+       "weight": {
+        "default": 1.0,
+        "title": "Weight",
+        "type": "number"
+       }
+      },
+      "required": [
+       "name"
+      ],
+      "title": "LossTerm",
+      "type": "object"
+     },
+     "ModalityPlan": {
+      "properties": {
+       "modality": {
+        "title": "Modality",
+        "type": "string"
+       },
+       "encoder": {
+        "title": "Encoder",
+        "type": "string"
+       },
+       "regime": {
+        "default": "frozen",
+        "enum": [
+         "frozen",
+         "partial_finetune",
+         "from_scratch"
+        ],
+        "title": "Regime",
+        "type": "string"
+       },
+       "trainable_blocks": {
+        "default": 0,
+        "title": "Trainable Blocks",
+        "type": "integer"
+       },
+       "patch_context": {
+        "anyOf": [
+         {
+          "type": "number"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Patch Context"
+       },
+       "colour_normalisation": {
+        "default": "none",
+        "enum": [
+         "none",
+         "reinhard"
+        ],
+        "title": "Colour Normalisation",
+        "type": "string"
+       },
+       "greyscale_to_rgb": {
+        "default": false,
+        "title": "Greyscale To Rgb",
+        "type": "boolean"
+       },
+       "augment": {
+        "default": false,
+        "title": "Augment",
+        "type": "boolean"
+       },
+       "text_max_tokens": {
+        "anyOf": [
+         {
+          "type": "integer"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Text Max Tokens"
+       },
+       "text_cleaning": {
+        "default": "basic",
+        "enum": [
+         "none",
+         "basic"
+        ],
+        "title": "Text Cleaning",
+        "type": "string"
+       },
+       "n_variable_features": {
+        "anyOf": [
+         {
+          "type": "integer"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "N Variable Features"
+       },
+       "matrix_input": {
+        "anyOf": [
+         {
+          "enum": [
+           "log_normalised",
+           "pca",
+           "standardised"
+          ],
+          "type": "string"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Matrix Input"
+       },
+       "pca_components": {
+        "anyOf": [
+         {
+          "type": "integer"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Pca Components"
+       }
+      },
+      "required": [
+       "modality",
+       "encoder"
+      ],
+      "title": "ModalityPlan",
+      "type": "object"
+     },
+     "Plan": {
+      "properties": {
+       "task": {
+        "$ref": "#/$defs/TaskSpec"
+       },
+       "split": {
+        "$ref": "#/$defs/SplitSpec"
+       },
+       "configs": {
+        "items": {
+         "$ref": "#/$defs/ConfigSpec"
+        },
+        "title": "Configs",
+        "type": "array"
+       },
+       "evaluation": {
+        "$ref": "#/$defs/EvalSpec"
+       },
+       "downstream": {
+        "items": {
+         "enum": [
+          "retrieval_examples",
+          "cross_modal_prediction",
+          "classification",
+          "clustering",
+          "spatial_maps"
+         ],
+         "type": "string"
+        },
+        "title": "Downstream",
+        "type": "array"
+       },
+       "rationale": {
+        "default": "",
+        "title": "Rationale",
+        "type": "string"
+       },
+       "source": {
+        "default": "heuristic",
+        "enum": [
+         "heuristic",
+         "llm",
+         "llm_repaired",
+         "heuristic_fallback"
+        ],
+        "title": "Source",
+        "type": "string"
+       }
+      },
+      "required": [
+       "task",
+       "split",
+       "configs",
+       "evaluation"
+      ],
+      "title": "Plan",
+      "type": "object"
+     },
+     "PredictionSpec": {
+      "properties": {
+       "source": {
+        "title": "Source",
+        "type": "string"
+       },
+       "target": {
+        "title": "Target",
+        "type": "string"
+       }
+      },
+      "required": [
+       "source",
+       "target"
+      ],
+      "title": "PredictionSpec",
+      "type": "object"
+     },
+     "SplitSpec": {
+      "properties": {
+       "strategy": {
+        "enum": [
+         "predefined",
+         "grouped_kfold",
+         "random"
+        ],
+        "title": "Strategy",
+        "type": "string"
+       },
+       "group_column": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Group Column"
+       },
+       "n_folds": {
+        "default": 1,
+        "title": "N Folds",
+        "type": "integer"
+       },
+       "val_fraction": {
+        "default": 0.1,
+        "title": "Val Fraction",
+        "type": "number"
+       },
+       "test_fraction": {
+        "default": 0.2,
+        "title": "Test Fraction",
+        "type": "number"
+       },
+       "stratify_column": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Stratify Column"
+       }
+      },
+      "required": [
+       "strategy"
+      ],
+      "title": "SplitSpec",
+      "type": "object"
+     },
+     "TaskSpec": {
+      "description": "The user's objective, made explicit. Produced by objective.py (+ LLM).",
+      "properties": {
+       "raw_objective": {
+        "title": "Raw Objective",
+        "type": "string"
+       },
+       "tasks": {
+        "items": {
+         "enum": [
+          "retrieval",
+          "cross_modal_prediction",
+          "classification",
+          "clustering",
+          "joint_embedding"
+         ],
+         "type": "string"
+        },
+        "title": "Tasks",
+        "type": "array"
+       },
+       "primary_task": {
+        "enum": [
+         "retrieval",
+         "cross_modal_prediction",
+         "classification",
+         "clustering",
+         "joint_embedding"
+        ],
+        "title": "Primary Task",
+        "type": "string"
+       },
+       "pair": {
+        "items": {
+         "type": "string"
+        },
+        "title": "Pair",
+        "type": "array"
+       },
+       "prediction": {
+        "anyOf": [
+         {
+          "$ref": "#/$defs/PredictionSpec"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null
+       },
+       "label_column": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Label Column"
+       },
+       "label_evidence": {
+        "default": "",
+        "title": "Label Evidence",
+        "type": "string"
+       },
+       "modality_mentions": {
+        "additionalProperties": {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        "title": "Modality Mentions",
+        "type": "object"
+       },
+       "evidence": {
+        "additionalProperties": {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        "title": "Evidence",
+        "type": "object"
+       },
+       "source": {
+        "default": "heuristic",
+        "enum": [
+         "heuristic",
+         "llm"
+        ],
+        "title": "Source",
+        "type": "string"
+       }
+      },
+      "required": [
+       "raw_objective",
+       "tasks",
+       "primary_task",
+       "pair"
+      ],
+      "title": "TaskSpec",
+      "type": "object"
+     },
+     "TrainingSpec": {
+      "properties": {
+       "batch_size": {
+        "default": 256,
+        "title": "Batch Size",
+        "type": "integer"
+       },
+       "lr": {
+        "default": 0.001,
+        "title": "Lr",
+        "type": "number"
+       },
+       "weight_decay": {
+        "default": 0.0001,
+        "title": "Weight Decay",
+        "type": "number"
+       },
+       "max_epochs": {
+        "default": 200,
+        "title": "Max Epochs",
+        "type": "integer"
+       },
+       "patience": {
+        "default": 15,
+        "title": "Patience",
+        "type": "integer"
+       },
+       "temperature_init": {
+        "default": 0.07,
+        "title": "Temperature Init",
+        "type": "number"
+       },
+       "learnable_temperature": {
+        "default": true,
+        "title": "Learnable Temperature",
+        "type": "boolean"
+       },
+       "soft_target_temperature": {
+        "default": 0.1,
+        "title": "Soft Target Temperature",
+        "type": "number"
+       },
+       "finetune_lr": {
+        "default": 1e-05,
+        "title": "Finetune Lr",
+        "type": "number"
+       },
+       "train_seconds": {
+        "default": 120.0,
+        "title": "Train Seconds",
+        "type": "number"
+       }
+      },
+      "title": "TrainingSpec",
+      "type": "object"
+     }
+    },
+    "properties": {
+     "plan": {
+      "$ref": "#/$defs/Plan"
+     },
+     "decisions": {
+      "items": {
+       "$ref": "#/$defs/LLMDecision"
+      },
+      "title": "Decisions",
+      "type": "array"
+     }
+    },
+    "required": [
+     "plan"
+    ],
+    "title": "PlannerReply",
+    "type": "object"
+   },
+   "text": "{\"plan\": {\"task\": {\"raw_objective\": \"Learn a joint image\\u2013caption embedding for image\\u2013text retrieval and imaging-modality classification.\", \"tasks\": [\"joint_embedding\", \"retrieval\", \"classification\"], \"primary_task\": \"retrieval\", \"pair\": [\"image\", \"text\"], \"prediction\": null, \"label_column\": \"modality\", \"label_evidence\": \"the objective names column 'modality'\", \"modality_mentions\": {\"image\": [\"image\", \"image\", \"imaging\"], \"text\": [\"caption\", \"text\"]}, \"evidence\": {\"retrieval\": [\"retrieval\"], \"classification\": [\"classification\"], \"joint_embedding\": [\"joint image-caption embedding\"]}, \"source\": \"heuristic\"}, \"split\": {\"strategy\": \"predefined\", \"group_column\": \"article\", \"n_folds\": 1, \"val_fraction\": 0.1, \"test_fraction\": 0.2, \"stratify_column\": \"modality\"}, \"configs\": [{\"name\": \"primary\", \"role\": \"primary\", \"strategy\": \"contrastive_alignment\", \"fusion\": \"joint\", \"modalities\": [{\"modality\": \"image\", \"encoder\": \"biomedclip_image\", \"regime\": \"frozen\", \"trainable_blocks\": 0, \"patch_context\": null, \"colour_normalisation\": \"none\", \"greyscale_to_rgb\": true, \"augment\": false, \"text_max_tokens\": null, \"text_cleaning\": \"basic\", \"n_variable_features\": null, \"matrix_input\": null, \"pca_components\": null}, {\"modality\": \"text\", \"encoder\": \"biomedclip_text\", \"regime\": \"frozen\", \"trainable_blocks\": 0, \"patch_context\": null, \"colour_normalisation\": \"none\", \"greyscale_to_rgb\": false, \"augment\": false, \"text_max_tokens\": 128, \"text_cleaning\": \"basic\", \"n_variable_features\": null, \"matrix_input\": null, \"pca_components\": null}], \"losses\": [{\"name\": \"infonce\", \"weight\": 1}, {\"name\": \"supervised_ce\", \"weight\": 0.5}], \"head\": {\"embed_dim\": 512, \"hidden_dim\": 512, \"n_layers\": 2, \"dropout\": 0.1, \"residual\": true}, \"training\": {\"batch_size\": 512, \"lr\": 0.001, \"weight_decay\": 0.0001, \"max_epochs\": 300, \"patience\": 15, \"temperature_init\": 0.07, \"learnable_temperature\": true, \"soft_target_temperature\": 0.1, \"finetune_lr\": 1e-05, \"train_seconds\": 180}, \"rationale\": \"Frozen BiomedCLIP dual encoder (best screening: alignment R@10 0.966, image probe F1 0.934). Residual 512-d heads start from the zero-shot solution. InfoNCE plus a CE term with weight 0.5 on 'modality', because the objective asks for classification.\"}, {\"name\": \"partial_finetune\", \"role\": \"comparison\", \"strategy\": \"contrastive_alignment\", \"fusion\": \"joint\", \"modalities\": [{\"modality\": \"image\", \"encoder\": \"biomedclip_image\", \"regime\": \"partial_finetune\", \"trainable_blocks\": 2, \"patch_context\": null, \"colour_normalisation\": \"none\", \"greyscale_to_rgb\": true, \"augment\": true, \"text_max_tokens\": null, \"text_cleaning\": \"basic\", \"n_variable_features\": null, \"matrix_input\": null, \"pca_components\": null}, {\"modality\": \"text\", \"encoder\": \"biomedclip_text\", \"regime\": \"partial_finetune\", \"trainable_blocks\": 2, \"patch_context\": null, \"colour_normalisation\": \"none\", \"greyscale_to_rgb\": false, \"augment\": false, \"text_max_tokens\": 128, \"text_cleaning\": \"basic\", \"n_variable_features\": null, \"matrix_input\": null, \"pca_components\": null}], \"losses\": [{\"name\": \"infonce\", \"weight\": 1}, {\"name\": \"supervised_ce\", \"weight\": 0.5}], \"head\": {\"embed_dim\": 512, \"hidden_dim\": 512, \"n_layers\": 2, \"dropout\": 0.1, \"residual\": true}, \"training\": {\"batch_size\": 128, \"lr\": 0.001, \"weight_decay\": 0.0001, \"max_epochs\": 5, \"patience\": 2, \"temperature_init\": 0.07, \"learnable_temperature\": true, \"soft_target_temperature\": 0.1, \"finetune_lr\": 1e-05, \"train_seconds\": 1200}, \"rationale\": \"Tests the frozen-backbone decision. ~20k training pairs and about 2 epochs fit in the 1200 s fine-tuning budget on mps. Batch raised to 128 so the comparison has more negatives per positive than at 64.\"}, {\"name\": \"contrastive_only\", \"role\": \"comparison\", \"strategy\": \"contrastive_alignment\", \"fusion\": \"joint\", \"modalities\": [{\"modality\": \"image\", \"encoder\": \"biomedclip_image\", \"regime\": \"frozen\", \"trainable_blocks\": 0, \"patch_context\": null, \"colour_normalisation\": \"none\", \"greyscale_to_rgb\": true, \"augment\": false, \"text_max_tokens\": null, \"text_cleaning\": \"basic\", \"n_variable_features\": null, \"matrix_input\": null, \"pca_components\": null}, {\"modality\": \"text\", \"encoder\": \"biomedclip_text\", \"regime\": \"frozen\", \"trainable_blocks\": 0, \"patch_context\": null, \"colour_normalisation\": \"none\", \"greyscale_to_rgb\": false, \"augment\": false, \"text_max_tokens\": 128, \"text_cleaning\": \"basic\", \"n_variable_features\": null, \"matrix_input\": null, \"pca_components\": null}], \"losses\": [{\"name\": \"infonce\", \"weight\": 1}], \"head\": {\"embed_dim\": 512, \"hidden_dim\": 512, \"n_layers\": 2, \"dropout\": 0.1, \"residual\": true}, \"training\": {\"batch_size\": 512, \"lr\": 0.001, \"weight_decay\": 0.0001, \"max_epochs\": 300, \"patience\": 15, \"temperature_init\": 0.07, \"learnable_temperature\": true, \"soft_target_temperature\": 0.1, \"finetune_lr\": 1e-05, \"train_seconds\": 180}, \"rationale\": \"Tests whether the supervised CE term helps classification without costing retrieval recall.\"}], \"evaluation\": {\"primary_metric\": \"retrieval_mean_recall_at_10\", \"metrics\": [\"retrieval_recall_at_k\", \"linear_probe\", \"knn_accuracy\", \"clustering_ari_nmi\", \"retrieval_label_match_at_k\", \"alignment_uniformity\", \"modality_gap\", \"effective_rank\"], \"baselines\": [\"unimodal\", \"chance\", \"cca\", \"early_fusion\", \"late_fusion\", \"zero_shot\"], \"label_column\": \"modality\", \"group_column\": null, \"retrieval_ks\": [1, 5, 10], \"prediction_genes\": 50}, \"downstream\": [\"retrieval_examples\", \"classification\"], \"rationale\": \"Frozen BiomedCLIP with residual contrastive heads and an auxiliary CE term on 'modality', using the predefined article-disjoint train split. Two comparisons test (a) partial fine-tuning and (b) dropping the CE term. Compute: 1\\u00d7(180+1200+180) + 180 refit + 180 critic revision = 1920 s, within the 2700 s total.\", \"source\": \"llm\"}, \"decisions\": [{\"step\": \"preprocessing\", \"decision\": \"text truncation length\", \"chosen\": \"128 tokens (was 80)\", \"rationale\": \"The 80-token cap assumed about 1.6 tokens per word at the 49-word p95. Biomedical captions split into more subword tokens under a PubMedBERT-style vocabulary (17,825 distinct words). Also, 2.6% of captions exceed 60 words, which means 100+ tokens. Frozen features are computed only once, so a 128-token cap costs almost nothing extra and stops the longest captions being cut off. It stays well under the encoder's 256-token context. The same cap is used in all configs so they remain comparable.\", \"alternatives_rejected\": [{\"option\": \"80 tokens\", \"reason\": \"risks cutting off the ~5% longest captions, which carry the most information\"}, {\"option\": \"256 tokens\", \"reason\": \"pads almost every caption for no gain, and slows the fine-tuning comparison\"}]}, {\"step\": \"hyperparameters\", \"decision\": \"batch size of the partial fine-tuning comparison\", \"chosen\": \"128 (was 64)\", \"rationale\": \"InfoNCE quality depends on the number of in-batch negatives. At batch 64 the comparison would have 63 negatives against the primary's 511, mixing the effect of fine-tuning with the effect of fewer negatives. Only the last 2 blocks per tower get gradients, so memory on mps stays manageable at 128, which is under the 256 fine-tuning maximum. The run is time-capped at 1200 s, so a larger batch does not break the budget.\", \"alternatives_rejected\": [{\"option\": \"64\", \"reason\": \"too few negatives; the comparison would be confounded\"}, {\"option\": \"256\", \"reason\": \"higher risk of running out of memory on mps with two ViT/BERT-B towers\"}]}, {\"step\": \"hyperparameters\", \"decision\": \"joint-space dimension (correcting the proposal's log)\", \"chosen\": \"512-d residual heads\", \"rationale\": \"The proposal's log says 'embed 256', but its plan uses 512. Residual heads must keep the pretrained BiomedCLIP dimension (512) so that the zero-shot space (R@10 0.966) is the starting point. 512 is kept.\", \"alternatives_rejected\": [{\"option\": \"256-d\", \"reason\": \"incompatible with identity-initialised residual heads on 512-d pre-aligned embeddings\"}]}, {\"step\": \"evaluation\", \"decision\": \"caveat on the zero-shot baseline and on the screening scores\", \"chosen\": \"keep the zero_shot baseline but report it as possibly optimistic\", \"rationale\": \"BiomedCLIP was pretrained on PMC-15M, which consists of 15M figure\\u2013caption pairs from PubMed Central. This dataset is made of figure captions grouped by article, with UMLS-like concept codes. Its articles may therefore overlap the pretraining corpus, which would inflate the zero-shot score (0.966) and the gap to the other encoders (CCA \\u2264 0.599 for non-BiomedCLIP pairs). The screening also used a pool of only 500 candidates. Test retrieval searches 5,000 candidates, so absolute R@10 will be lower. Finally, 18.7% of test samples share an article with validation samples, so selecting the model on validation may flatter test results slightly. This is not a train\\u2013test leak.\", \"alternatives_rejected\": [{\"option\": \"drop zero_shot baseline\", \"reason\": \"it is the key reference for whether the learned heads add anything; it is kept and flagged as possibly optimistic instead\"}]}, {\"step\": \"losses\", \"decision\": \"supervised CE on 'modality' (adopted)\", \"chosen\": \"weight 0.5, with the contrastive_only comparison\", \"rationale\": \"The objective explicitly asks for imaging-modality classification, so training on the label is allowed. 99.1% of samples are labelled. The minority class (PET, 147 samples, imbalance ratio 64) makes macro-F1 sensitive, which the CE term should help. Whether it costs retrieval recall is the open question that contrastive_only tests.\", \"alternatives_rejected\": [{\"option\": \"supcon\", \"reason\": \"with 6 coarse classes it would pull together many captions with different content and harm instance-level retrieval\"}]}]}",
+   "data": {
+    "plan": {
+     "task": {
+      "raw_objective": "Learn a joint image\u2013caption embedding for image\u2013text retrieval and imaging-modality classification.",
+      "tasks": [
+       "joint_embedding",
+       "retrieval",
+       "classification"
+      ],
+      "primary_task": "retrieval",
+      "pair": [
+       "image",
+       "text"
+      ],
+      "prediction": null,
+      "label_column": "modality",
+      "label_evidence": "the objective names column 'modality'",
+      "modality_mentions": {
+       "image": [
+        "image",
+        "image",
+        "imaging"
+       ],
+       "text": [
+        "caption",
+        "text"
+       ]
+      },
+      "evidence": {
+       "retrieval": [
+        "retrieval"
+       ],
+       "classification": [
+        "classification"
+       ],
+       "joint_embedding": [
+        "joint image-caption embedding"
+       ]
+      },
+      "source": "heuristic"
+     },
+     "split": {
+      "strategy": "predefined",
+      "group_column": "article",
+      "n_folds": 1,
+      "val_fraction": 0.1,
+      "test_fraction": 0.2,
+      "stratify_column": "modality"
+     },
+     "configs": [
+      {
+       "name": "primary",
+       "role": "primary",
+       "strategy": "contrastive_alignment",
+       "fusion": "joint",
+       "modalities": [
+        {
+         "modality": "image",
+         "encoder": "biomedclip_image",
+         "regime": "frozen",
+         "trainable_blocks": 0,
+         "patch_context": null,
+         "colour_normalisation": "none",
+         "greyscale_to_rgb": true,
+         "augment": false,
+         "text_max_tokens": null,
+         "text_cleaning": "basic",
+         "n_variable_features": null,
+         "matrix_input": null,
+         "pca_components": null
+        },
+        {
+         "modality": "text",
+         "encoder": "biomedclip_text",
+         "regime": "frozen",
+         "trainable_blocks": 0,
+         "patch_context": null,
+         "colour_normalisation": "none",
+         "greyscale_to_rgb": false,
+         "augment": false,
+         "text_max_tokens": 128,
+         "text_cleaning": "basic",
+         "n_variable_features": null,
+         "matrix_input": null,
+         "pca_components": null
+        }
+       ],
+       "losses": [
+        {
+         "name": "infonce",
+         "weight": 1
+        },
+        {
+         "name": "supervised_ce",
+         "weight": 0.5
+        }
+       ],
+       "head": {
+        "embed_dim": 512,
+        "hidden_dim": 512,
+        "n_layers": 2,
+        "dropout": 0.1,
+        "residual": true
+       },
+       "training": {
+        "batch_size": 512,
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "max_epochs": 300,
+        "patience": 15,
+        "temperature_init": 0.07,
+        "learnable_temperature": true,
+        "soft_target_temperature": 0.1,
+        "finetune_lr": 1e-05,
+        "train_seconds": 180
+       },
+       "rationale": "Frozen BiomedCLIP dual encoder (best screening: alignment R@10 0.966, image probe F1 0.934). Residual 512-d heads start from the zero-shot solution. InfoNCE plus a CE term with weight 0.5 on 'modality', because the objective asks for classification."
+      },
+      {
+       "name": "partial_finetune",
+       "role": "comparison",
+       "strategy": "contrastive_alignment",
+       "fusion": "joint",
+       "modalities": [
+        {
+         "modality": "image",
+         "encoder": "biomedclip_image",
+         "regime": "partial_finetune",
+         "trainable_blocks": 2,
+         "patch_context": null,
+         "colour_normalisation": "none",
+         "greyscale_to_rgb": true,
+         "augment": true,
+         "text_max_tokens": null,
+         "text_cleaning": "basic",
+         "n_variable_features": null,
+         "matrix_input": null,
+         "pca_components": null
+        },
+        {
+         "modality": "text",
+         "encoder": "biomedclip_text",
+         "regime": "partial_finetune",
+         "trainable_blocks": 2,
+         "patch_context": null,
+         "colour_normalisation": "none",
+         "greyscale_to_rgb": false,
+         "augment": false,
+         "text_max_tokens": 128,
+         "text_cleaning": "basic",
+         "n_variable_features": null,
+         "matrix_input": null,
+         "pca_components": null
+        }
+       ],
+       "losses": [
+        {
+         "name": "infonce",
+         "weight": 1
+        },
+        {
+         "name": "supervised_ce",
+         "weight": 0.5
+        }
+       ],
+       "head": {
+        "embed_dim": 512,
+        "hidden_dim": 512,
+        "n_layers": 2,
+        "dropout": 0.1,
+        "residual": true
+       },
+       "training": {
+        "batch_size": 128,
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "max_epochs": 5,
+        "patience": 2,
+        "temperature_init": 0.07,
+        "learnable_temperature": true,
+        "soft_target_temperature": 0.1,
+        "finetune_lr": 1e-05,
+        "train_seconds": 1200
+       },
+       "rationale": "Tests the frozen-backbone decision. ~20k training pairs and about 2 epochs fit in the 1200 s fine-tuning budget on mps. Batch raised to 128 so the comparison has more negatives per positive than at 64."
+      },
+      {
+       "name": "contrastive_only",
+       "role": "comparison",
+       "strategy": "contrastive_alignment",
+       "fusion": "joint",
+       "modalities": [
+        {
+         "modality": "image",
+         "encoder": "biomedclip_image",
+         "regime": "frozen",
+         "trainable_blocks": 0,
+         "patch_context": null,
+         "colour_normalisation": "none",
+         "greyscale_to_rgb": true,
+         "augment": false,
+         "text_max_tokens": null,
+         "text_cleaning": "basic",
+         "n_variable_features": null,
+         "matrix_input": null,
+         "pca_components": null
+        },
+        {
+         "modality": "text",
+         "encoder": "biomedclip_text",
+         "regime": "frozen",
+         "trainable_blocks": 0,
+         "patch_context": null,
+         "colour_normalisation": "none",
+         "greyscale_to_rgb": false,
+         "augment": false,
+         "text_max_tokens": 128,
+         "text_cleaning": "basic",
+         "n_variable_features": null,
+         "matrix_input": null,
+         "pca_components": null
+        }
+       ],
+       "losses": [
+        {
+         "name": "infonce",
+         "weight": 1
+        }
+       ],
+       "head": {
+        "embed_dim": 512,
+        "hidden_dim": 512,
+        "n_layers": 2,
+        "dropout": 0.1,
+        "residual": true
+       },
+       "training": {
+        "batch_size": 512,
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "max_epochs": 300,
+        "patience": 15,
+        "temperature_init": 0.07,
+        "learnable_temperature": true,
+        "soft_target_temperature": 0.1,
+        "finetune_lr": 1e-05,
+        "train_seconds": 180
+       },
+       "rationale": "Tests whether the supervised CE term helps classification without costing retrieval recall."
+      }
+     ],
+     "evaluation": {
+      "primary_metric": "retrieval_mean_recall_at_10",
+      "metrics": [
+       "retrieval_recall_at_k",
+       "linear_probe",
+       "knn_accuracy",
+       "clustering_ari_nmi",
+       "retrieval_label_match_at_k",
+       "alignment_uniformity",
+       "modality_gap",
+       "effective_rank"
+      ],
+      "baselines": [
+       "unimodal",
+       "chance",
+       "cca",
+       "early_fusion",
+       "late_fusion",
+       "zero_shot"
+      ],
+      "label_column": "modality",
+      "group_column": null,
+      "retrieval_ks": [
+       1,
+       5,
+       10
+      ],
+      "prediction_genes": 50
+     },
+     "downstream": [
+      "retrieval_examples",
+      "classification"
+     ],
+     "rationale": "Frozen BiomedCLIP with residual contrastive heads and an auxiliary CE term on 'modality', using the predefined article-disjoint train split. Two comparisons test (a) partial fine-tuning and (b) dropping the CE term. Compute: 1\u00d7(180+1200+180) + 180 refit + 180 critic revision = 1920 s, within the 2700 s total.",
+     "source": "llm"
+    },
+    "decisions": [
+     {
+      "step": "preprocessing",
+      "decision": "text truncation length",
+      "chosen": "128 tokens (was 80)",
+      "rationale": "The 80-token cap assumed about 1.6 tokens per word at the 49-word p95. Biomedical captions split into more subword tokens under a PubMedBERT-style vocabulary (17,825 distinct words). Also, 2.6% of captions exceed 60 words, which means 100+ tokens. Frozen features are computed only once, so a 128-token cap costs almost nothing extra and stops the longest captions being cut off. It stays well under the encoder's 256-token context. The same cap is used in all configs so they remain comparable.",
+      "alternatives_rejected": [
+       {
+        "option": "80 tokens",
+        "reason": "risks cutting off the ~5% longest captions, which carry the most information"
+       },
+       {
+        "option": "256 tokens",
+        "reason": "pads almost every caption for no gain, and slows the fine-tuning comparison"
+       }
+      ]
+     },
+     {
+      "step": "hyperparameters",
+      "decision": "batch size of the partial fine-tuning comparison",
+      "chosen": "128 (was 64)",
+      "rationale": "InfoNCE quality depends on the number of in-batch negatives. At batch 64 the comparison would have 63 negatives against the primary's 511, mixing the effect of fine-tuning with the effect of fewer negatives. Only the last 2 blocks per tower get gradients, so memory on mps stays manageable at 128, which is under the 256 fine-tuning maximum. The run is time-capped at 1200 s, so a larger batch does not break the budget.",
+      "alternatives_rejected": [
+       {
+        "option": "64",
+        "reason": "too few negatives; the comparison would be confounded"
+       },
+       {
+        "option": "256",
+        "reason": "higher risk of running out of memory on mps with two ViT/BERT-B towers"
+       }
+      ]
+     },
+     {
+      "step": "hyperparameters",
+      "decision": "joint-space dimension (correcting the proposal's log)",
+      "chosen": "512-d residual heads",
+      "rationale": "The proposal's log says 'embed 256', but its plan uses 512. Residual heads must keep the pretrained BiomedCLIP dimension (512) so that the zero-shot space (R@10 0.966) is the starting point. 512 is kept.",
+      "alternatives_rejected": [
+       {
+        "option": "256-d",
+        "reason": "incompatible with identity-initialised residual heads on 512-d pre-aligned embeddings"
+       }
+      ]
+     },
+     {
+      "step": "evaluation",
+      "decision": "caveat on the zero-shot baseline and on the screening scores",
+      "chosen": "keep the zero_shot baseline but report it as possibly optimistic",
+      "rationale": "BiomedCLIP was pretrained on PMC-15M, which consists of 15M figure\u2013caption pairs from PubMed Central. This dataset is made of figure captions grouped by article, with UMLS-like concept codes. Its articles may therefore overlap the pretraining corpus, which would inflate the zero-shot score (0.966) and the gap to the other encoders (CCA \u2264 0.599 for non-BiomedCLIP pairs). The screening also used a pool of only 500 candidates. Test retrieval searches 5,000 candidates, so absolute R@10 will be lower. Finally, 18.7% of test samples share an article with validation samples, so selecting the model on validation may flatter test results slightly. This is not a train\u2013test leak.",
+      "alternatives_rejected": [
+       {
+        "option": "drop zero_shot baseline",
+        "reason": "it is the key reference for whether the learned heads add anything; it is kept and flagged as possibly optimistic instead"
+       }
+      ]
+     },
+     {
+      "step": "losses",
+      "decision": "supervised CE on 'modality' (adopted)",
+      "chosen": "weight 0.5, with the contrastive_only comparison",
+      "rationale": "The objective explicitly asks for imaging-modality classification, so training on the label is allowed. 99.1% of samples are labelled. The minority class (PET, 147 samples, imbalance ratio 64) makes macro-F1 sensitive, which the CE term should help. Whether it costs retrieval recall is the open question that contrastive_only tests.",
+      "alternatives_rejected": [
+       {
+        "option": "supcon",
+        "reason": "with 6 coarse classes it would pull together many captions with different content and harm instance-level retrieval"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "key": "critic_b630a090442ed673.json",
+   "role": "critic",
+   "sequence": 0,
+   "backend": "claude_cli",
+   "model_requested": "claude-opus-5-5",
+   "model_used": "claude-opus-5-5",
+   "seconds": 34.333301749953534,
+   "cost_usd": 0.135241,
+   "usage": {
+    "input_tokens": 2,
+    "output_tokens": 3264,
+    "cache_read_input_tokens": 925,
+    "cache_creation_input_tokens": 8721,
+    "stop_reason": "tool_use",
+    "models": [
+     "claude-opus-5-5"
+    ]
+   },
+   "structured": true,
+   "cached": false,
+   "note": "",
+   "response_chars": 2955,
+   "effort": "high",
+   "max_output_tokens": 16000,
+   "budget_usd_given": 2.728,
+   "system": "You are the critic in an automated multimodal representation-learning agent. Configurations have been trained and evaluated on **validation** data; the test data have not been used yet. Your job is to judge whether the results serve the user's objective and, if not, to propose **at most one revision**. Python executes the revision on the same folds and keeps it only if the validation primary metric improves; otherwise the original result stands.\n\n## What you receive\n\n- The objective, the plan that ran (primary and comparison configurations) and a data-profile summary.\n- Training summaries per configuration and fold: best epoch, epochs run, why training stopped, final temperature, training and validation loss.\n- Validation results:\n  - the primary metric for every configuration and baseline;\n  - comparisons of the primary against each baseline, with across-fold spread or bootstrap intervals;\n  - plain-language flags.\n- Deterministic triggers, already computed, each with a suggested remedy. The possible triggers are:\n  - a comparison beating the primary;\n  - a linear or unimodal baseline beating the primary;\n  - overfitting or underfitting in the training curves;\n  - embedding collapse;\n  - batch confounding.\n- The allowed revision actions, the editable fields with their ranges, and the remaining compute.\n\n## How to judge\n\n- **Prefer no revision** when results are adequate for the objective, or when no available change is likely to help within budget. A revision costs compute and can make things worse.\n- **Do not chase noise.** A difference whose interval includes zero, or that changes sign across folds, is not a reason to revise.\n- **Read every score against its baseline and chance level.** Retrieval near chance on held-out groups can be expected when samples within a group look alike; label-level agreement may still be informative.\n- **The two possible actions:**\n  - `switch_primary`: promote a comparison configuration that did clearly better on the primary metric.\n  - `modify_primary`: change specific fields of the primary configuration. Examples:\n    - more regularisation (dropout, weight decay, a smaller head) when validation scores peak early and then fall;\n    - more epochs or time, when budget remains and training stopped on a cap while still improving;\n    - a warmer, fixed temperature when embeddings collapse;\n    - colour normalisation when embeddings group by batch;\n    - a residual head (`head.residual`, identity at the start) when the encoders are a pre-aligned pair and the trained heads fall below the zero-shot baseline;\n    - a larger weight on the regression term when a linear predictor beats the trained head.\n- **Be explicit about uncertainty**, and name the metric you expect to move.\n\n## Output\n\nReturn a single JSON object:\n\n```json\n{\n  \"assessment\": \"2-4 sentences: are the results adequate for the objective? cite validation numbers against baselines and chance\",\n  \"action\": \"none | modify_primary | switch_primary\",\n  \"target_config\": \"for switch_primary: the comparison configuration to promote\",\n  \"changes\": [{\"path\": \"training.lr\", \"value\": 0.0005}],\n  \"rationale\": \"why this action, citing metrics and training summaries\",\n  \"alternatives_rejected\": [{\"option\": \"...\", \"reason\": \"...\"}],\n  \"expected_effect\": \"which validation metric should move, and in which direction\"\n}\n```\n\n**Changes.** For `modify_primary`, each change's `path` must be one of the editable fields listed, and its value must lie in the listed range.\n- `loss.<name>.weight` sets the weight of a loss term. It adds the term if absent; 0 removes it.\n- `modalities.<modality>.<field>` edits one modality's preprocessing.\n",
+   "user": "Review this run.\n\n{\n \"objective\": \"Learn a joint image\\u2013caption embedding for image\\u2013text retrieval and imaging-modality classification.\",\n \"profile_summary\": \"table; n=27,000; image (image, 27,000), text (text, 26,999); label 'modality' 6 classes on 99% of samples; 21341 'article' groups; predefined split 20,000/2,000/5,000\",\n \"plan\": {\n  \"task\": {\n   \"raw_objective\": \"Learn a joint image\\u2013caption embedding for image\\u2013text retrieval and imaging-modality classification.\",\n   \"tasks\": [\n    \"joint_embedding\",\n    \"retrieval\",\n    \"classification\"\n   ],\n   \"primary_task\": \"retrieval\",\n   \"pair\": [\n    \"image\",\n    \"text\"\n   ],\n   \"prediction\": null,\n   \"label_column\": \"modality\",\n   \"label_evidence\": \"the objective names column 'modality'\",\n   \"modality_mentions\": {\n    \"image\": [\n     \"image\",\n     \"image\",\n     \"imaging\"\n    ],\n    \"text\": [\n     \"caption\",\n     \"text\"\n    ]\n   },\n   \"evidence\": {\n    \"retrieval\": [\n     \"retrieval\"\n    ],\n    \"classification\": [\n     \"classification\"\n    ],\n    \"joint_embedding\": [\n     \"joint image-caption embedding\"\n    ]\n   },\n   \"source\": \"heuristic\"\n  },\n  \"split\": {\n   \"strategy\": \"predefined\",\n   \"group_column\": \"article\",\n   \"n_folds\": 1,\n   \"val_fraction\": 0.1,\n   \"test_fraction\": 0.2,\n   \"stratify_column\": \"modality\"\n  },\n  \"configs\": [\n   {\n    \"name\": \"primary\",\n    \"role\": \"primary\",\n    \"strategy\": \"contrastive_alignment\",\n    \"fusion\": \"joint\",\n    \"modalities\": [\n     {\n      \"modality\": \"image\",\n      \"encoder\": \"biomedclip_image\",\n      \"regime\": \"frozen\",\n      \"trainable_blocks\": 0,\n      \"patch_context\": null,\n      \"colour_normalisation\": \"none\",\n      \"greyscale_to_rgb\": true,\n      \"augment\": false,\n      \"text_max_tokens\": null,\n      \"text_cleaning\": \"basic\",\n      \"n_variable_features\": null,\n      \"matrix_input\": null,\n      \"pca_components\": null\n     },\n     {\n      \"modality\": \"text\",\n      \"encoder\": \"biomedclip_text\",\n      \"regime\": \"frozen\",\n      \"trainable_blocks\": 0,\n      \"patch_context\": null,\n      \"colour_normalisation\": \"none\",\n      \"greyscale_to_rgb\": false,\n      \"augment\": false,\n      \"text_max_tokens\": 128,\n      \"text_cleaning\": \"basic\",\n      \"n_variable_features\": null,\n      \"matrix_input\": null,\n      \"pca_components\": null\n     }\n    ],\n    \"losses\": [\n     {\n      \"name\": \"infonce\",\n      \"weight\": 1.0\n     },\n     {\n      \"name\": \"supervised_ce\",\n      \"weight\": 0.5\n     }\n    ],\n    \"head\": {\n     \"embed_dim\": 512,\n     \"hidden_dim\": 512,\n     \"n_layers\": 2,\n     \"dropout\": 0.1,\n     \"residual\": true\n    },\n    \"training\": {\n     \"batch_size\": 512,\n     \"lr\": 0.001,\n     \"weight_decay\": 0.0001,\n     \"max_epochs\": 300,\n     \"patience\": 15,\n     \"temperature_init\": 0.07,\n     \"learnable_temperature\": true,\n     \"soft_target_temperature\": 0.1,\n     \"finetune_lr\": 1e-05,\n     \"train_seconds\": 180.0\n    },\n    \"rationale\": \"Frozen BiomedCLIP dual encoder (best screening: alignment R@10 0.966, image probe F1 0.934). Residual 512-d heads start from the zero-shot solution. InfoNCE plus a CE term with weight 0.5 on 'modality', because the objective asks for classification.\"\n   },\n   {\n    \"name\": \"partial_finetune\",\n    \"role\": \"comparison\",\n    \"strategy\": \"contrastive_alignment\",\n    \"fusion\": \"joint\",\n    \"modalities\": [\n     {\n      \"modality\": \"image\",\n      \"encoder\": \"biomedclip_image\",\n      \"regime\": \"partial_finetune\",\n      \"trainable_blocks\": 2,\n      \"patch_context\": null,\n      \"colour_normalisation\": \"none\",\n      \"greyscale_to_rgb\": true,\n      \"augment\": true,\n      \"text_max_tokens\": null,\n      \"text_cleaning\": \"basic\",\n      \"n_variable_features\": null,\n      \"matrix_input\": null,\n      \"pca_components\": null\n     },\n     {\n      \"modality\": \"text\",\n      \"encoder\": \"biomedclip_text\",\n      \"regime\": \"partial_finetune\",\n      \"trainable_blocks\": 2,\n      \"patch_context\": null,\n      \"colour_normalisation\": \"none\",\n      \"greyscale_to_rgb\": false,\n      \"augment\": false,\n      \"text_max_tokens\": 128,\n      \"text_cleaning\": \"basic\",\n      \"n_variable_features\": null,\n      \"matrix_input\": null,\n      \"pca_components\": null\n     }\n    ],\n    \"losses\": [\n     {\n      \"name\": \"infonce\",\n      \"weight\": 1.0\n     },\n     {\n      \"name\": \"supervised_ce\",\n      \"weight\": 0.5\n     }\n    ],\n    \"head\": {\n     \"embed_dim\": 512,\n     \"hidden_dim\": 512,\n     \"n_layers\": 2,\n     \"dropout\": 0.1,\n     \"residual\": true\n    },\n    \"training\": {\n     \"batch_size\": 128,\n     \"lr\": 0.001,\n     \"weight_decay\": 0.0001,\n     \"max_epochs\": 5,\n     \"patience\": 2,\n     \"temperature_init\": 0.07,\n     \"learnable_temperature\": true,\n     \"soft_target_temperature\": 0.1,\n     \"finetune_lr\": 1e-05,\n     \"train_seconds\": 1200.0\n    },\n    \"rationale\": \"Tests the frozen-backbone decision. ~20k training pairs and about 2 epochs fit in the 1200 s fine-tuning budget on mps. Batch raised to 128 so the comparison has more negatives per positive than at 64.\"\n   },\n   {\n    \"name\": \"contrastive_only\",\n    \"role\": \"comparison\",\n    \"strategy\": \"contrastive_alignment\",\n    \"fusion\": \"joint\",\n    \"modalities\": [\n     {\n      \"modality\": \"image\",\n      \"encoder\": \"biomedclip_image\",\n      \"regime\": \"frozen\",\n      \"trainable_blocks\": 0,\n      \"patch_context\": null,\n      \"colour_normalisation\": \"none\",\n      \"greyscale_to_rgb\": true,\n      \"augment\": false,\n      \"text_max_tokens\": null,\n      \"text_cleaning\": \"basic\",\n      \"n_variable_features\": null,\n      \"matrix_input\": null,\n      \"pca_components\": null\n     },\n     {\n      \"modality\": \"text\",\n      \"encoder\": \"biomedclip_text\",\n      \"regime\": \"frozen\",\n      \"trainable_blocks\": 0,\n      \"patch_context\": null,\n      \"colour_normalisation\": \"none\",\n      \"greyscale_to_rgb\": false,\n      \"augment\": false,\n      \"text_max_tokens\": 128,\n      \"text_cleaning\": \"basic\",\n      \"n_variable_features\": null,\n      \"matrix_input\": null,\n      \"pca_components\": null\n     }\n    ],\n    \"losses\": [\n     {\n      \"name\": \"infonce\",\n      \"weight\": 1.0\n     }\n    ],\n    \"head\": {\n     \"embed_dim\": 512,\n     \"hidden_dim\": 512,\n     \"n_layers\": 2,\n     \"dropout\": 0.1,\n     \"residual\": true\n    },\n    \"training\": {\n     \"batch_size\": 512,\n     \"lr\": 0.001,\n     \"weight_decay\": 0.0001,\n     \"max_epochs\": 300,\n     \"patience\": 15,\n     \"temperature_init\": 0.07,\n     \"learnable_temperature\": true,\n     \"soft_target_temperature\": 0.1,\n     \"finetune_lr\": 1e-05,\n     \"train_seconds\": 180.0\n    },\n    \"rationale\": \"Tests whether the supervised CE term helps classification without costing retrieval recall.\"\n   }\n  ],\n  \"evaluation\": {\n   \"primary_metric\": \"retrieval_mean_recall_at_10\",\n   \"metrics\": [\n    \"retrieval_recall_at_k\",\n    \"linear_probe\",\n    \"knn_accuracy\",\n    \"clustering_ari_nmi\",\n    \"retrieval_label_match_at_k\",\n    \"alignment_uniformity\",\n    \"modality_gap\",\n    \"effective_rank\"\n   ],\n   \"baselines\": [\n    \"unimodal\",\n    \"chance\",\n    \"cca\",\n    \"early_fusion\",\n    \"late_fusion\",\n    \"zero_shot\"\n   ],\n   \"label_column\": \"modality\",\n   \"group_column\": null,\n   \"retrieval_ks\": [\n    1,\n    5,\n    10\n   ],\n   \"prediction_genes\": 50\n  },\n  \"downstream\": [\n   \"retrieval_examples\",\n   \"classification\"\n  ],\n  \"rationale\": \"Frozen BiomedCLIP with residual contrastive heads and an auxiliary CE term on 'modality', using the predefined article-disjoint train split. Two comparisons test (a) partial fine-tuning and (b) dropping the CE term. Compute: 1\\u00d7(180+1200+180) + 180 refit + 180 critic revision = 1920 s, within the 2700 s total.\"\n },\n \"validation\": {\n  \"primary_metric\": \"retrieval_mean_recall_at_10\",\n  \"n_folds\": 1,\n  \"per_fold\": {\n   \"primary\": [\n    0.8707\n   ],\n   \"partial_finetune\": [\n    0.8707\n   ],\n   \"contrastive_only\": [\n    0.8707\n   ],\n   \"cca\": [\n    0.7599\n   ],\n   \"zero_shot\": [\n    0.8707\n   ]\n  },\n  \"comparisons\": [\n   {\n    \"metric\": \"retrieval_mean_recall_at_10\",\n    \"primary\": \"primary\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.8707,\n    \"alternative_value\": 0.7599,\n    \"difference_mean\": 0.1108,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 1,\n    \"n_folds\": 1,\n    \"difference_ci95\": [\n     0.0975,\n     0.1238\n    ],\n    \"primary_ci95\": [\n     0.8569,\n     0.8844\n    ],\n    \"alternative_ci95\": [\n     0.7429,\n     0.7769\n    ]\n   },\n   {\n    \"metric\": \"retrieval_mean_recall_at_10\",\n    \"primary\": \"primary\",\n    \"alternative\": \"zero_shot\",\n    \"primary_value\": 0.8707,\n    \"alternative_value\": 0.8707,\n    \"difference_mean\": 0.0,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 0,\n    \"n_folds\": 1,\n    \"difference_ci95\": [\n     0.0,\n     0.0\n    ],\n    \"primary_ci95\": [\n     0.8569,\n     0.8844\n    ],\n    \"alternative_ci95\": [\n     0.8569,\n     0.8844\n    ]\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"primary\",\n    \"alternative\": \"unimodal\",\n    \"primary_value\": 0.5085,\n    \"alternative_value\": 0.5122,\n    \"difference_mean\": -0.0037,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 0,\n    \"n_folds\": 1\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"primary\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.5085,\n    \"alternative_value\": 0.2442,\n    \"difference_mean\": 0.2643,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 1,\n    \"n_folds\": 1\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"primary\",\n    \"alternative\": \"zero_shot\",\n    \"primary_value\": 0.5085,\n    \"alternative_value\": 0.5085,\n    \"difference_mean\": 0.0,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 0,\n    \"n_folds\": 1\n   }\n  ],\n  \"retrieval_chance_R@10\": [\n   0.005\n  ]\n },\n \"flags\": [\n  {\n   \"code\": \"no_clear_gain_over_zero_shot\",\n   \"severity\": \"info\",\n   \"metric\": \"retrieval_mean_recall_at_10\",\n   \"value\": 0.0,\n   \"message\": \"No clear difference between the primary configuration and zero_shot on retrieval_mean_recall_at_10 (difference +0.000, 95% CI +0.000 to +0.000).\"\n  },\n  {\n   \"code\": \"no_clear_gain_over_unimodal\",\n   \"severity\": \"info\",\n   \"metric\": \"clustering_ari\",\n   \"value\": -0.0037,\n   \"message\": \"No clear difference between the primary configuration and unimodal on clustering_ari (mean difference -0.004; primary better in 0/1 folds).\"\n  },\n  {\n   \"code\": \"no_clear_gain_over_zero_shot\",\n   \"severity\": \"info\",\n   \"metric\": \"clustering_ari\",\n   \"value\": 0.0,\n   \"message\": \"No clear difference between the primary configuration and zero_shot on clustering_ari (mean difference +0.000; primary better in 0/1 folds).\"\n  }\n ],\n \"training\": {\n  \"primary\": [\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 0,\n    \"best_val_score\": 0.8707,\n    \"epochs_run\": 15,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1055751,\n    \"final_temperature\": 0.0423,\n    \"initial_val_score\": 0.8707,\n    \"train_loss_at_best\": null,\n    \"val_loss_at_best\": null,\n    \"val_score\": [\n     0.8562,\n     0.8497,\n     0.8502,\n     0.8442,\n     0.8504,\n     0.8509,\n     0.8442,\n     0.8442,\n     0.8412,\n     0.8359,\n     0.8347,\n     0.8337,\n     0.8367,\n     0.8309,\n     0.8299\n    ],\n    \"train_loss\": [\n     2.3441,\n     1.8385,\n     1.5938,\n     1.4003,\n     1.254,\n     1.1403,\n     1.0452,\n     0.9647,\n     0.8953,\n     0.8316,\n     0.7725,\n     0.7261,\n     0.6784,\n     0.6413,\n     0.6041\n    ]\n   }\n  ],\n  \"partial_finetune\": [\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 0,\n    \"best_val_score\": 0.8707,\n    \"epochs_run\": 2,\n    \"stopped_because\": \"no validation improvement for 2 epochs\",\n    \"n_trainable_parameters\": 30621191,\n    \"final_temperature\": 0.0535,\n    \"initial_val_score\": 0.8707,\n    \"train_loss_at_best\": null,\n    \"val_loss_at_best\": null,\n    \"val_score\": [\n     0.8527,\n     0.8562\n    ],\n    \"train_loss\": [\n     1.2332,\n     0.7286\n    ]\n   }\n  ],\n  \"contrastive_only\": [\n   {\n    \"selection_metric\": \"retrieval\",\n    \"best_epoch\": 0,\n    \"best_val_score\": 0.8707,\n    \"epochs_run\": 15,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"n_trainable_parameters\": 1052673,\n    \"final_temperature\": 0.0425,\n    \"initial_val_score\": 0.8707,\n    \"train_loss_at_best\": null,\n    \"val_loss_at_best\": null,\n    \"val_score\": [\n     0.8564,\n     0.8507,\n     0.8497,\n     0.8419,\n     0.8522,\n     0.8489,\n     0.8447,\n     0.8427,\n     0.8412,\n     0.8377,\n     0.8334,\n     0.8404,\n     0.8322,\n     0.8257,\n     0.8257\n    ],\n    \"train_loss\": [\n     1.5155,\n     1.1693,\n     1.0792,\n     0.9984,\n     0.9298,\n     0.8662,\n     0.8067,\n     0.7523,\n     0.7022,\n     0.6558,\n     0.6066,\n     0.5696,\n     0.5269,\n     0.4988,\n     0.4667\n    ]\n   }\n  ]\n },\n \"triggers\": [\n  {\n   \"code\": \"no_clear_gain_over_zero_shot\",\n   \"message\": \"No clear difference between the primary configuration and zero_shot on retrieval_mean_recall_at_10 (difference +0.000, 95% CI +0.000 to +0.000).\",\n   \"severity\": \"info\",\n   \"config\": null,\n   \"suggested_action\": \"none\",\n   \"suggested_target\": null,\n   \"suggested_changes\": []\n  },\n  {\n   \"code\": \"no_clear_gain_over_unimodal\",\n   \"message\": \"No clear difference between the primary configuration and unimodal on clustering_ari (mean difference -0.004; primary better in 0/1 folds).\",\n   \"severity\": \"info\",\n   \"config\": null,\n   \"suggested_action\": \"none\",\n   \"suggested_target\": null,\n   \"suggested_changes\": []\n  },\n  {\n   \"code\": \"no_clear_gain_over_zero_shot\",\n   \"message\": \"No clear difference between the primary configuration and zero_shot on clustering_ari (mean difference +0.000; primary better in 0/1 folds).\",\n   \"severity\": \"info\",\n   \"config\": null,\n   \"suggested_action\": \"none\",\n   \"suggested_target\": null,\n   \"suggested_changes\": []\n  }\n ],\n \"compute\": {\n  \"n_folds\": 1,\n  \"per_fit_seconds_cap\": 180.0,\n  \"remaining_train_seconds\": 1140\n },\n \"actions\": [\n  \"none\",\n  \"modify_primary\",\n  \"switch_primary\"\n ],\n \"editable_fields\": {\n  \"head.embed_dim\": [\n   32,\n   1024\n  ],\n  \"head.hidden_dim\": [\n   64,\n   2048\n  ],\n  \"head.n_layers\": [\n   1,\n   4\n  ],\n  \"head.dropout\": [\n   0.0,\n   0.5\n  ],\n  \"training.batch_size\": [\n   16,\n   2048\n  ],\n  \"training.lr\": [\n   1e-06,\n   0.01\n  ],\n  \"training.weight_decay\": [\n   0.0,\n   0.1\n  ],\n  \"training.patience\": [\n   1,\n   50\n  ],\n  \"training.temperature_init\": [\n   0.01,\n   1.0\n  ],\n  \"training.soft_target_temperature\": [\n   0.01,\n   1.0\n  ],\n  \"training.finetune_lr\": [\n   1e-07,\n   0.0001\n  ],\n  \"training.max_epochs\": [\n   1,\n   300\n  ],\n  \"training.train_seconds\": [\n   10.0,\n   180.0\n  ],\n  \"training.learnable_temperature\": [\n   true,\n   false\n  ],\n  \"head.residual\": [\n   true,\n   false\n  ],\n  \"loss.cross_modal_regression.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.infonce.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.masked_denoising.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.reconstruction.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.soft_infonce.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.ssl_simclr.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.supcon.weight\": [\n   0.0,\n   10.0\n  ],\n  \"loss.supervised_ce.weight\": [\n   0.0,\n   10.0\n  ],\n  \"modalities.image.encoder\": [\n   \"phikon\",\n   \"plip_image\",\n   \"biomedclip_image\",\n   \"clip_b16_image\",\n   \"dinov2_base\",\n   \"dinov2_small\",\n   \"resnet50\",\n   \"resnet18\"\n  ],\n  \"modalities.image.colour_normalisation\": [\n   \"none\",\n   \"reinhard\"\n  ],\n  \"modalities.text.encoder\": [\n   \"plip_text\",\n   \"biomedclip_text\",\n   \"pubmedbert\",\n   \"clip_b16_text\",\n   \"minilm\"\n  ],\n  \"modalities.text.text_max_tokens\": [\n   8,\n   256\n  ]\n }\n}",
+   "schema": {
+    "$defs": {
+     "Alternative": {
+      "properties": {
+       "option": {
+        "title": "Option",
+        "type": "string"
+       },
+       "reason": {
+        "title": "Reason",
+        "type": "string"
+       }
+      },
+      "required": [
+       "option",
+       "reason"
+      ],
+      "title": "Alternative",
+      "type": "object"
+     },
+     "Change": {
+      "properties": {
+       "path": {
+        "title": "Path",
+        "type": "string"
+       },
+       "value": {
+        "anyOf": [
+         {
+          "type": "number"
+         },
+         {
+          "type": "integer"
+         },
+         {
+          "type": "string"
+         },
+         {
+          "type": "boolean"
+         }
+        ],
+        "title": "Value"
+       }
+      },
+      "required": [
+       "path",
+       "value"
+      ],
+      "title": "Change",
+      "type": "object"
+     }
+    },
+    "properties": {
+     "assessment": {
+      "title": "Assessment",
+      "type": "string"
+     },
+     "action": {
+      "enum": [
+       "none",
+       "modify_primary",
+       "switch_primary"
+      ],
+      "title": "Action",
+      "type": "string"
+     },
+     "target_config": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Target Config"
+     },
+     "changes": {
+      "items": {
+       "$ref": "#/$defs/Change"
+      },
+      "title": "Changes",
+      "type": "array"
+     },
+     "rationale": {
+      "title": "Rationale",
+      "type": "string"
+     },
+     "alternatives_rejected": {
+      "items": {
+       "$ref": "#/$defs/Alternative"
+      },
+      "title": "Alternatives Rejected",
+      "type": "array"
+     },
+     "expected_effect": {
+      "default": "",
+      "title": "Expected Effect",
+      "type": "string"
+     }
+    },
+    "required": [
+     "assessment",
+     "action",
+     "rationale"
+    ],
+    "title": "CriticReply",
+    "type": "object"
+   },
+   "text": "{\"assessment\": \"Retrieval is strong in absolute terms (mean R@10 0.871 vs chance 0.005, +0.111 over CCA with CI 0.098\\u20130.124), but the trained primary is exactly the zero-shot BiomedCLIP solution: every configuration selected epoch 0 (the identity residual init), so training contributed nothing. Classification structure (ARI 0.509) equals zero-shot and is on par with the unimodal baseline (0.512). The results are adequate as a zero-shot solution, but the learned heads do not yet improve on it.\", \"action\": \"modify_primary\", \"target_config\": \"primary\", \"changes\": [{\"path\": \"training.lr\", \"value\": 3e-05}, {\"path\": \"training.weight_decay\", \"value\": 0.01}], \"rationale\": \"In all trained configurations, validation R@10 drops right after the first epoch (primary 0.871 \\u2192 0.856 \\u2192 0.830) while training loss falls steadily (2.34 \\u2192 0.60). The same happens in contrastive_only, so the CE term is not the cause. At lr 1e-3, one epoch (about 40 steps at batch 512) moves the residual heads well away from an already well-aligned BiomedCLIP space; this data is likely close to BiomedCLIP's PMC pretraining distribution. A roughly 30\\u00d7 smaller learning rate with stronger weight decay keeps the heads near identity and gives the best chance of a small in-domain gain before overfitting starts. Partial fine-tuning is no option: it also degraded (0.853 after one epoch) and does not fit the 180 s per-fit cap. The revision costs 180 s of the 1140 s left, and the zero-shot result stands if validation does not improve.\", \"alternatives_rejected\": [{\"option\": \"none (accept zero-shot)\", \"reason\": \"Defensible, but the drop from epoch 1 onward clearly shows the learning rate is too high. A cheap single fit can test that, and it carries no downside risk because the original is kept if validation does not improve.\"}, {\"option\": \"switch_primary to partial_finetune or contrastive_only\", \"reason\": \"Both also selected epoch 0 and scored the same 0.8707; there is nothing to promote.\"}, {\"option\": \"more dropout or a smaller head\", \"reason\": \"The heads lose ground within the first epoch's updates, so the step size matters more than capacity; regularising capacity alone at lr 1e-3 would probably still drift.\"}, {\"option\": \"fixed warmer temperature\", \"reason\": \"There is no sign of embedding collapse; the temperature fell to only about 0.042, and recall does not depend on the temperature at evaluation.\"}, {\"option\": \"increase supervised_ce weight for classification\", \"reason\": \"The primary metric is retrieval; raising CE risks retrieval recall, and ARI is already at the unimodal level.\"}], \"expected_effect\": \"Validation retrieval_mean_recall_at_10 should rise slightly above 0.8707, at best by about 0.005\\u20130.01. That is within the \\u00b10.014 bootstrap interval, so any gain is uncertain and may be noise. Otherwise early stopping picks epoch 0 again and the zero-shot result is kept. Clustering ARI should stay about the same.\"}",
+   "data": {
+    "assessment": "Retrieval is strong in absolute terms (mean R@10 0.871 vs chance 0.005, +0.111 over CCA with CI 0.098\u20130.124), but the trained primary is exactly the zero-shot BiomedCLIP solution: every configuration selected epoch 0 (the identity residual init), so training contributed nothing. Classification structure (ARI 0.509) equals zero-shot and is on par with the unimodal baseline (0.512). The results are adequate as a zero-shot solution, but the learned heads do not yet improve on it.",
+    "action": "modify_primary",
+    "target_config": "primary",
+    "changes": [
+     {
+      "path": "training.lr",
+      "value": 3e-05
+     },
+     {
+      "path": "training.weight_decay",
+      "value": 0.01
+     }
+    ],
+    "rationale": "In all trained configurations, validation R@10 drops right after the first epoch (primary 0.871 \u2192 0.856 \u2192 0.830) while training loss falls steadily (2.34 \u2192 0.60). The same happens in contrastive_only, so the CE term is not the cause. At lr 1e-3, one epoch (about 40 steps at batch 512) moves the residual heads well away from an already well-aligned BiomedCLIP space; this data is likely close to BiomedCLIP's PMC pretraining distribution. A roughly 30\u00d7 smaller learning rate with stronger weight decay keeps the heads near identity and gives the best chance of a small in-domain gain before overfitting starts. Partial fine-tuning is no option: it also degraded (0.853 after one epoch) and does not fit the 180 s per-fit cap. The revision costs 180 s of the 1140 s left, and the zero-shot result stands if validation does not improve.",
+    "alternatives_rejected": [
+     {
+      "option": "none (accept zero-shot)",
+      "reason": "Defensible, but the drop from epoch 1 onward clearly shows the learning rate is too high. A cheap single fit can test that, and it carries no downside risk because the original is kept if validation does not improve."
+     },
+     {
+      "option": "switch_primary to partial_finetune or contrastive_only",
+      "reason": "Both also selected epoch 0 and scored the same 0.8707; there is nothing to promote."
+     },
+     {
+      "option": "more dropout or a smaller head",
+      "reason": "The heads lose ground within the first epoch's updates, so the step size matters more than capacity; regularising capacity alone at lr 1e-3 would probably still drift."
+     },
+     {
+      "option": "fixed warmer temperature",
+      "reason": "There is no sign of embedding collapse; the temperature fell to only about 0.042, and recall does not depend on the temperature at evaluation."
+     },
+     {
+      "option": "increase supervised_ce weight for classification",
+      "reason": "The primary metric is retrieval; raising CE risks retrieval recall, and ARI is already at the unimodal level."
+     }
+    ],
+    "expected_effect": "Validation retrieval_mean_recall_at_10 should rise slightly above 0.8707, at best by about 0.005\u20130.01. That is within the \u00b10.014 bootstrap interval, so any gain is uncertain and may be noise. Otherwise early stopping picks epoch 0 again and the zero-shot result is kept. Clustering ARI should stay about the same."
+   }
+  },
+  {
+   "key": "writer_de6b6333aeabc67f.json",
+   "role": "writer",
+   "sequence": 0,
+   "backend": "claude_cli",
+   "model_requested": "claude-opus-5-5",
+   "model_used": "claude-opus-5-5",
+   "seconds": 60.49957429198548,
+   "cost_usd": 0.2985658,
+   "usage": {
+    "input_tokens": 2,
+    "output_tokens": 6525,
+    "cache_read_input_tokens": 1569,
+    "cache_creation_input_tokens": 20968,
+    "stop_reason": "tool_use",
+    "models": [
+     "claude-opus-5-5"
+    ]
+   },
+   "structured": true,
+   "cached": false,
+   "note": "",
+   "response_chars": 12652,
+   "effort": "medium",
+   "max_output_tokens": 16000,
+   "budget_usd_given": 2.5928,
+   "system": "You are the report writer for an automated multimodal representation-learning agent. You receive the complete record of one run:\n- the objective and the data profile;\n- the decision log (every choice, its rationale and the alternatives rejected);\n- encoder screening scores and training summaries;\n- held-out test results for every configuration and baseline, with across-fold spread or bootstrap intervals;\n- comparisons against baselines and plain-language flags;\n- the critic's assessment and what happened to its revision.\n\nWrite the interpretive sections of the analysis report for a biostatistics audience. Be precise, quantitative and candid:\n\n- **Support every claim with a number from the record, and cite it.** Copy numbers as they appear in the record, rounded to at most 3 decimals or written as percentages of the recorded proportions. Do not compute new ratios, differences or percentages: the record already contains the differences that matter. Every number in your prose is checked against the record automatically, and numbers that cannot be found are flagged in the report.\n- **Read every score against its baselines and its chance level.** Report uncertainty: the spread across folds, or bootstrap intervals. Say when an interval includes zero.\n- **Answer whether integrating the modalities helped.** Compare against each modality alone, against linear alignment or ridge regression, and against fusion of unimodal features. A tie with a simpler method is a finding, not a failure.\n- **Distinguish what the evidence shows from what it does not.** Explain the warning flags, for example a pretrained model whose pretraining may overlap the evaluation data, or embeddings that group by batch.\n- **Do not invent** numbers, models, datasets or steps that are not in the record. Do not name the dataset beyond what the record says.\n\nReturn a single JSON object, and nothing else, with these keys (values are Markdown strings; use short paragraphs or bullet lists):\n\n```json\n{\n  \"executive_summary\": \"4-6 sentences: objective, what the agent decided, headline held-out results with uncertainty, bottom line\",\n  \"data_and_objective\": \"what the profile showed that mattered for the decisions\",\n  \"decisions_explained\": \"why this split, strategy, encoders, preprocessing, losses and evaluation were chosen and what was rejected (from the decision log)\",\n  \"results_interpretation\": \"retrieval, prediction, classification and clustering results read against baselines and chance\",\n  \"integration_benefit\": \"did the joint representation beat each modality alone and the linear baselines? where, by how much, how certain\",\n  \"critic_and_revision\": \"what the critic concluded, whether a revision ran, and whether it was kept\",\n  \"limitations\": \"honest limitations of this run, as a bulleted list\"\n}\n```\n",
+   "user": "Write the report sections for this run.\n\n{\n \"objective\": \"Learn a joint image\\u2013caption embedding for image\\u2013text retrieval and imaging-modality classification.\",\n \"quick_mode\": false,\n \"data\": {\n  \"summary\": \"table; n=27,000; image (image, 27,000), text (text, 26,999); label 'modality' 6 classes on 99% of samples; 21341 'article' groups; predefined split 20,000/2,000/5,000\",\n  \"n_samples\": 27000,\n  \"modalities\": [\n   {\n    \"name\": \"image\",\n    \"kind\": \"image\",\n    \"n_present\": 27000,\n    \"image_source\": \"files\",\n    \"domain_hint\": \"greyscale_imaging\",\n    \"greyscale_fraction\": 0.704167,\n    \"near_duplicate_fraction\": 0.0,\n    \"colour_between_group_share\": null,\n    \"spot_diameter_px\": null\n   },\n   {\n    \"name\": \"text\",\n    \"kind\": \"text\",\n    \"n_present\": 26999,\n    \"words_median\": 17.0,\n    \"vocabulary_size\": 17825,\n    \"near_duplicate_fraction\": 0.009963\n   }\n  ],\n  \"pairs\": {\n   \"image|text\": 26999\n  },\n  \"labels\": [\n   {\n    \"column\": \"modality\",\n    \"n_classes\": 6,\n    \"n_labelled\": 26756,\n    \"labelled_fraction\": 0.990963,\n    \"class_counts\": {\n     \"X-Ray Computed Tomography\": 9387,\n     \"Plain x-ray\": 7449,\n     \"Magnetic Resonance Imaging\": 4275,\n     \"Ultrasonography\": 3882,\n     \"angiogram\": 1616,\n     \"Positron-Emission Tomography\": 147\n    },\n    \"imbalance_ratio\": 63.857143\n   }\n  ],\n  \"groups\": [\n   {\n    \"column\": \"article\",\n    \"role\": \"group\",\n    \"n_levels\": 21341\n   }\n  ],\n  \"cv_group\": \"article\",\n  \"predefined_split\": {\n   \"train\": 20000,\n   \"val\": 2000,\n   \"test\": 5000\n  }\n },\n \"task\": {\n  \"tasks\": [\n   \"joint_embedding\",\n   \"retrieval\",\n   \"classification\"\n  ],\n  \"primary_task\": \"retrieval\",\n  \"pair\": [\n   \"image\",\n   \"text\"\n  ],\n  \"prediction\": null,\n  \"label_column\": \"modality\",\n  \"label_evidence\": \"the objective names column 'modality'\"\n },\n \"plan\": {\n  \"source\": \"llm\",\n  \"split\": {\n   \"strategy\": \"predefined\",\n   \"group_column\": \"article\",\n   \"n_folds\": 1,\n   \"val_fraction\": 0.1,\n   \"test_fraction\": 0.2,\n   \"stratify_column\": \"modality\"\n  },\n  \"folds\": [\n   {\n    \"name\": \"predefined\",\n    \"train\": 20000,\n    \"val\": 1999,\n    \"test\": 5000,\n    \"test_groups\": [],\n    \"val_groups\": []\n   }\n  ],\n  \"configurations\": [\n   {\n    \"name\": \"primary\",\n    \"role\": \"primary\",\n    \"strategy\": \"contrastive_alignment\",\n    \"fusion\": \"joint\",\n    \"encoders\": {\n     \"image\": \"biomedclip_image\",\n     \"text\": \"biomedclip_text\"\n    },\n    \"regimes\": {\n     \"image\": \"frozen\",\n     \"text\": \"frozen\"\n    },\n    \"losses\": {\n     \"infonce\": 1.0,\n     \"supervised_ce\": 0.5\n    },\n    \"embed_dim\": 512,\n    \"residual_head\": true,\n    \"hidden_dim\": 512,\n    \"dropout\": 0.1,\n    \"lr\": 0.001,\n    \"batch_size\": 512,\n    \"max_epochs\": 300,\n    \"train_seconds\": 180.0,\n    \"rationale\": \"Frozen BiomedCLIP dual encoder (best screening: alignment R@10 0.966, image probe F1 0.934). Residual 512-d heads start from the zero-shot solution. InfoNCE plus a CE term with weight 0.5 on 'modality', because the objective asks for classification.\"\n   },\n   {\n    \"name\": \"partial_finetune\",\n    \"role\": \"comparison\",\n    \"strategy\": \"contrastive_alignment\",\n    \"fusion\": \"joint\",\n    \"encoders\": {\n     \"image\": \"biomedclip_image\",\n     \"text\": \"biomedclip_text\"\n    },\n    \"regimes\": {\n     \"image\": \"partial_finetune (last 2 blocks)\",\n     \"text\": \"partial_finetune (last 2 blocks)\"\n    },\n    \"losses\": {\n     \"infonce\": 1.0,\n     \"supervised_ce\": 0.5\n    },\n    \"embed_dim\": 512,\n    \"residual_head\": true,\n    \"hidden_dim\": 512,\n    \"dropout\": 0.1,\n    \"lr\": 0.001,\n    \"batch_size\": 128,\n    \"max_epochs\": 5,\n    \"train_seconds\": 1200.0,\n    \"rationale\": \"Tests the frozen-backbone decision. ~20k training pairs and about 2 epochs fit in the 1200 s fine-tuning budget on mps. Batch raised to 128 so the comparison has more negatives per positive than at 64.\"\n   },\n   {\n    \"name\": \"contrastive_only\",\n    \"role\": \"comparison\",\n    \"strategy\": \"contrastive_alignment\",\n    \"fusion\": \"joint\",\n    \"encoders\": {\n     \"image\": \"biomedclip_image\",\n     \"text\": \"biomedclip_text\"\n    },\n    \"regimes\": {\n     \"image\": \"frozen\",\n     \"text\": \"frozen\"\n    },\n    \"losses\": {\n     \"infonce\": 1.0\n    },\n    \"embed_dim\": 512,\n    \"residual_head\": true,\n    \"hidden_dim\": 512,\n    \"dropout\": 0.1,\n    \"lr\": 0.001,\n    \"batch_size\": 512,\n    \"max_epochs\": 300,\n    \"train_seconds\": 180.0,\n    \"rationale\": \"Tests whether the supervised CE term helps classification without costing retrieval recall.\"\n   },\n   {\n    \"name\": \"primary_revised\",\n    \"role\": \"primary\",\n    \"strategy\": \"contrastive_alignment\",\n    \"fusion\": \"joint\",\n    \"encoders\": {\n     \"image\": \"biomedclip_image\",\n     \"text\": \"biomedclip_text\"\n    },\n    \"regimes\": {\n     \"image\": \"frozen\",\n     \"text\": \"frozen\"\n    },\n    \"losses\": {\n     \"infonce\": 1.0,\n     \"supervised_ce\": 0.5\n    },\n    \"embed_dim\": 512,\n    \"residual_head\": true,\n    \"hidden_dim\": 512,\n    \"dropout\": 0.1,\n    \"lr\": 3e-05,\n    \"batch_size\": 512,\n    \"max_epochs\": 300,\n    \"train_seconds\": 180.0,\n    \"rationale\": \"Critic revision of primary: In all trained configurations, validation R@10 drops right after the first epoch (primary 0.871 \\u2192 0.856 \\u2192 0.830) while training loss falls steadily (2.34 \\u2192 0.60). The same happens in contrastive_only, so the CE term is not the cause. At lr 1e-3, one epoch (about 40 steps \"\n   }\n  ],\n  \"primary_metric\": \"retrieval_mean_recall_at_10\",\n  \"baselines\": [\n   \"unimodal\",\n   \"chance\",\n   \"cca\",\n   \"early_fusion\",\n   \"late_fusion\",\n   \"zero_shot\"\n  ],\n  \"downstream\": [\n   \"retrieval_examples\",\n   \"classification\"\n  ]\n },\n \"decisions\": [\n  {\n   \"step\": \"objective\",\n   \"decision\": \"parsed objective\",\n   \"chosen\": \"tasks ['joint_embedding', 'retrieval', 'classification']; primary retrieval; modalities ['image', 'text']\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"retrieval: retrieval; classification: classification; joint_embedding: joint image-caption embedding\"\n  },\n  {\n   \"step\": \"split\",\n   \"decision\": \"how to split the data\",\n   \"chosen\": \"predefined split\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"The data come with their own split (train 20,000, val 2,000, test 5,000); using it keeps results comparable with other work and keeps the test set unseen. Model selection uses validation only; test is scored once at the end. Note: 19% of test samples share a 'article' with a validation sample, so choices made on validation may flatter test results slightly.\"\n  },\n  {\n   \"step\": \"strategy\",\n   \"decision\": \"integration strategy\",\n   \"chosen\": \"contrastive_alignment (CLIP-style)\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"The objective needs a shared space (joint_embedding, retrieval) and there are about 19,999 training pairs. Contrastive alignment learns that space directly from the pairing: each sample's partner is its positive and the other samples in the batch its negatives (InfoNCE, a lower bound on the mutual information between modalities).\"\n  },\n  {\n   \"step\": \"encoder\",\n   \"decision\": \"encoder for 'image'\",\n   \"chosen\": \"biomedclip_image\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"Highest screening score among 4 candidates (alignment_recall_at_10 0.966 on held-out screening samples). Screened on 2000 training and 500 validation samples from separate groups.\"\n  },\n  {\n   \"step\": \"preprocessing\",\n   \"decision\": \"'image' channels\",\n   \"chosen\": \"greyscale replicated to RGB\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"70% of images are greyscale; pretrained encoders expect three channels, so luminance is copied to all three (no information added).\"\n  },\n  {\n   \"step\": \"encoder\",\n   \"decision\": \"encoder for 'text'\",\n   \"chosen\": \"biomedclip_text\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"Highest screening score among 4 candidates (alignment_recall_at_10 0.966 on held-out screening samples). Screened on 2000 training and 500 validation samples from separate groups.\"\n  },\n  {\n   \"step\": \"preprocessing\",\n   \"decision\": \"'text' text length\",\n   \"chosen\": \"80 tokens\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"95% of texts have <= 49 words (~80 tokens); capped at the encoder's context (256). Whitespace and Unicode are normalised.\"\n  },\n  {\n   \"step\": \"hyperparameters\",\n   \"decision\": \"head and training\",\n   \"chosen\": \"embed 256, batch 512, lr 0.001, dropout 0.1\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"About 19,999 training pairs: a 256-d joint space with 2-layer heads (512 hidden) is small relative to n; batch 512 gives 511 negatives per positive; early stopping on validation (patience 15) and a 180s cap per fit; temperature learned from 0.07.\"\n  },\n  {\n   \"step\": \"hyperparameters\",\n   \"decision\": \"head initialisation\",\n   \"chosen\": \"residual: identity at the start, 512-d\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"biomedclip_image and biomedclip_text were pretrained together into one aligned space. Each head adds a learned correction (initialised at zero) to that space, so training starts from the pretrained (zero-shot) solution, and the starting point itself is a candidate when the best epoch is chosen on validation.\"\n  },\n  {\n   \"step\": \"regime\",\n   \"decision\": \"frozen backbones or fine-tuning\",\n   \"chosen\": \"fine-tune as comparison\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"Frozen pretrained backbones with small trainable projection heads: few trainable parameters for the number of pairs (low variance), features computed once. Partial fine-tuning of the last 2 blocks is run as a comparison: pre-aligned dual encoder (biomedclip_image + biomedclip_text), about 19,999 training pairs and ~889s for 2 epochs on mps.\"\n  },\n  {\n   \"step\": \"comparison\",\n   \"decision\": \"comparison configuration 'partial_finetune'\",\n   \"chosen\": \"run\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"Tests the frozen-backbone decision: pre-aligned dual encoder (biomedclip_image + biomedclip_text), about 19,999 training pairs and ~889s for 2 epochs on mps.\"\n  },\n  {\n   \"step\": \"comparison\",\n   \"decision\": \"comparison configuration 'contrastive_only'\",\n   \"chosen\": \"run\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"Tests whether the supervised term helps.\"\n  },\n  {\n   \"step\": \"evaluation\",\n   \"decision\": \"primary metric\",\n   \"chosen\": \"retrieval_mean_recall_at_10\",\n   \"by\": \"heuristic\",\n   \"rationale\": \"First measurable task in the objective is 'retrieval'. Every metric is computed on held-out data and compared with unimodal features, linear alignment (CCA), zero-shot pretrained alignment and chance, to show whether integration helped.\"\n  },\n  {\n   \"step\": \"split\",\n   \"decision\": \"sample selection\",\n   \"chosen\": \"1 samples lack one of the paired modalities and are not used for alignment\",\n   \"by\": \"system\",\n   \"rationale\": \"Recorded while drawing the folds.\"\n  },\n  {\n   \"step\": \"preprocessing\",\n   \"decision\": \"text truncation length\",\n   \"chosen\": \"128 tokens (was 80)\",\n   \"by\": \"llm\",\n   \"rationale\": \"The 80-token cap assumed about 1.6 tokens per word at the 49-word p95. Biomedical captions split into more subword tokens under a PubMedBERT-style vocabulary (17,825 distinct words). Also, 2.6% of captions exceed 60 words, which means 100+ tokens. Frozen features are computed only once, so a 128-token cap costs almost nothing extra and stops the longest captions being cut off. It stays well under \"\n  },\n  {\n   \"step\": \"hyperparameters\",\n   \"decision\": \"batch size of the partial fine-tuning comparison\",\n   \"chosen\": \"128 (was 64)\",\n   \"by\": \"llm\",\n   \"rationale\": \"InfoNCE quality depends on the number of in-batch negatives. At batch 64 the comparison would have 63 negatives against the primary's 511, mixing the effect of fine-tuning with the effect of fewer negatives. Only the last 2 blocks per tower get gradients, so memory on mps stays manageable at 128, which is under the 256 fine-tuning maximum. The run is time-capped at 1200 s, so a larger batch does n\"\n  },\n  {\n   \"step\": \"hyperparameters\",\n   \"decision\": \"joint-space dimension (correcting the proposal's log)\",\n   \"chosen\": \"512-d residual heads\",\n   \"by\": \"llm\",\n   \"rationale\": \"The proposal's log says 'embed 256', but its plan uses 512. Residual heads must keep the pretrained BiomedCLIP dimension (512) so that the zero-shot space (R@10 0.966) is the starting point. 512 is kept.\"\n  },\n  {\n   \"step\": \"evaluation\",\n   \"decision\": \"caveat on the zero-shot baseline and on the screening scores\",\n   \"chosen\": \"keep the zero_shot baseline but report it as possibly optimistic\",\n   \"by\": \"llm\",\n   \"rationale\": \"BiomedCLIP was pretrained on PMC-15M, which consists of 15M figure\\u2013caption pairs from PubMed Central. This dataset is made of figure captions grouped by article, with UMLS-like concept codes. Its articles may therefore overlap the pretraining corpus, which would inflate the zero-shot score (0.966) and the gap to the other encoders (CCA \\u2264 0.599 for non-BiomedCLIP pairs). The screening also used a p\"\n  },\n  {\n   \"step\": \"losses\",\n   \"decision\": \"supervised CE on 'modality' (adopted)\",\n   \"chosen\": \"weight 0.5, with the contrastive_only comparison\",\n   \"by\": \"llm\",\n   \"rationale\": \"The objective explicitly asks for imaging-modality classification, so training on the label is allowed. 99.1% of samples are labelled. The minority class (PET, 147 samples, imbalance ratio 64) makes macro-F1 sensitive, which the CE term should help. Whether it costs retrieval recall is the open question that contrastive_only tests.\"\n  },\n  {\n   \"step\": \"planner\",\n   \"decision\": \"planner used\",\n   \"chosen\": \"llm\",\n   \"by\": \"llm\",\n   \"rationale\": \"LLM revised the rule-based proposal: configs[primary].modalities[text].text_max_tokens: 80 -> 128; configs[partial_finetune].modalities[text].text_max_tokens: 80 -> 128; configs[partial_finetune].training.batch_size: 64 -> 128; configs[contrastive_only].modalities[text].text_max_tokens: 80 -> 128\"\n  },\n  {\n   \"step\": \"split\",\n   \"decision\": \"fold predefined\",\n   \"chosen\": \"20,000 train / 1,999 validation / 5,000 test samples\",\n   \"by\": \"system\",\n   \"rationale\": \"Test groups: none (not grouped); validation groups: none (not grouped).\"\n  },\n  {\n   \"step\": \"critic\",\n   \"decision\": \"trigger: no_clear_gain_over_zero_shot\",\n   \"chosen\": \"none\",\n   \"by\": \"critic\",\n   \"rationale\": \"No clear difference between the primary configuration and zero_shot on retrieval_mean_recall_at_10 (difference +0.000, 95% CI +0.000 to +0.000).\"\n  },\n  {\n   \"step\": \"critic\",\n   \"decision\": \"trigger: no_clear_gain_over_unimodal\",\n   \"chosen\": \"none\",\n   \"by\": \"critic\",\n   \"rationale\": \"No clear difference between the primary configuration and unimodal on clustering_ari (mean difference -0.004; primary better in 0/1 folds).\"\n  },\n  {\n   \"step\": \"critic\",\n   \"decision\": \"trigger: no_clear_gain_over_zero_shot\",\n   \"chosen\": \"none\",\n   \"by\": \"critic\",\n   \"rationale\": \"No clear difference between the primary configuration and zero_shot on clustering_ari (mean difference +0.000; primary better in 0/1 folds).\"\n  },\n  {\n   \"step\": \"critic\",\n   \"decision\": \"revise the plan?\",\n   \"chosen\": \"modify the primary: training.lr=3e-05, training.weight_decay=0.01\",\n   \"by\": \"critic\",\n   \"rationale\": \"Retrieval is strong in absolute terms (mean R@10 0.871 vs chance 0.005, +0.111 over CCA with CI 0.098\\u20130.124), but the trained primary is exactly the zero-shot BiomedCLIP solution: every configuration selected epoch 0 (the identity residual init), so training contributed nothing. Classification structure (ARI 0.509) equals zero-shot and is on par with the unimodal baseline (0.512). The results are \"\n  },\n  {\n   \"step\": \"critic\",\n   \"decision\": \"keep the revision?\",\n   \"chosen\": \"discarded\",\n   \"by\": \"critic\",\n   \"rationale\": \"Validation retrieval_mean_recall_at_10: revised 0.8707 vs original 0.8707 (difference +0.0000; revised better in 0 of 1 folds). Discarded: the primary metric did not improve, so the original result stands.\"\n  },\n  {\n   \"step\": \"evaluation\",\n   \"decision\": \"held-out test result\",\n   \"chosen\": \"retrieval_mean_recall_at_10 0.7902\",\n   \"by\": \"system\",\n   \"rationale\": \"Test data were scored once, after the critic, for 'primary' and every baseline (1 fold(s)).\"\n  }\n ],\n \"screening\": {\n  \"metric\": \"alignment_recall_at_10\",\n  \"rows\": [\n   {\n    \"image\": \"biomedclip_image\",\n    \"text\": \"biomedclip_text\",\n    \"cca_recall_at_10\": 0.917,\n    \"zero_shot_recall_at_10\": 0.966,\n    \"alignment_recall_at_10\": 0.966,\n    \"probe_macro_f1\": 0.933777\n   },\n   {\n    \"image\": \"biomedclip_image\",\n    \"text\": \"pubmedbert\",\n    \"cca_recall_at_10\": 0.599,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.599,\n    \"probe_macro_f1\": 0.933777\n   },\n   {\n    \"image\": \"biomedclip_image\",\n    \"text\": \"clip_b16_text\",\n    \"cca_recall_at_10\": 0.595,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.595,\n    \"probe_macro_f1\": 0.933777\n   },\n   {\n    \"image\": \"biomedclip_image\",\n    \"text\": \"minilm\",\n    \"cca_recall_at_10\": 0.55,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.55,\n    \"probe_macro_f1\": 0.933777\n   },\n   {\n    \"image\": \"dinov2_base\",\n    \"text\": \"biomedclip_text\",\n    \"cca_recall_at_10\": 0.511,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.511,\n    \"probe_macro_f1\": 0.914078\n   },\n   {\n    \"image\": \"dinov2_base\",\n    \"text\": \"pubmedbert\",\n    \"cca_recall_at_10\": 0.328,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.328,\n    \"probe_macro_f1\": 0.914078\n   },\n   {\n    \"image\": \"dinov2_base\",\n    \"text\": \"clip_b16_text\",\n    \"cca_recall_at_10\": 0.298,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.298,\n    \"probe_macro_f1\": 0.914078\n   },\n   {\n    \"image\": \"dinov2_base\",\n    \"text\": \"minilm\",\n    \"cca_recall_at_10\": 0.255,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.255,\n    \"probe_macro_f1\": 0.914078\n   },\n   {\n    \"image\": \"clip_b16_image\",\n    \"text\": \"biomedclip_text\",\n    \"cca_recall_at_10\": 0.579,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.579,\n    \"probe_macro_f1\": 0.915148\n   },\n   {\n    \"image\": \"clip_b16_image\",\n    \"text\": \"pubmedbert\",\n    \"cca_recall_at_10\": 0.379,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.379,\n    \"probe_macro_f1\": 0.915148\n   },\n   {\n    \"image\": \"clip_b16_image\",\n    \"text\": \"clip_b16_text\",\n    \"cca_recall_at_10\": 0.377,\n    \"zero_shot_recall_at_10\": 0.375,\n    \"alignment_recall_at_10\": 0.377,\n    \"probe_macro_f1\": 0.915148\n   },\n   {\n    \"image\": \"clip_b16_image\",\n    \"text\": \"minilm\",\n    \"cca_recall_at_10\": 0.291,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.291,\n    \"probe_macro_f1\": 0.915148\n   },\n   {\n    \"image\": \"resnet50\",\n    \"text\": \"biomedclip_text\",\n    \"cca_recall_at_10\": 0.443,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.443,\n    \"probe_macro_f1\": 0.894704\n   },\n   {\n    \"image\": \"resnet50\",\n    \"text\": \"pubmedbert\",\n    \"cca_recall_at_10\": 0.272,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.272,\n    \"probe_macro_f1\": 0.727024\n   },\n   {\n    \"image\": \"resnet50\",\n    \"text\": \"clip_b16_text\",\n    \"cca_recall_at_10\": 0.25,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.25,\n    \"probe_macro_f1\": 0.727024\n   },\n   {\n    \"image\": \"resnet50\",\n    \"text\": \"minilm\",\n    \"cca_recall_at_10\": 0.233,\n    \"zero_shot_recall_at_10\": null,\n    \"alignment_recall_at_10\": 0.233,\n    \"probe_macro_f1\": 0.727024\n   }\n  ]\n },\n \"training\": {\n  \"primary\": [\n   {\n    \"best_epoch\": 0,\n    \"epochs_run\": 15,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.8707\n   }\n  ],\n  \"partial_finetune\": [\n   {\n    \"best_epoch\": 0,\n    \"epochs_run\": 2,\n    \"stopped_because\": \"no validation improvement for 2 epochs\",\n    \"best_val_score\": 0.8707\n   }\n  ],\n  \"contrastive_only\": [\n   {\n    \"best_epoch\": 0,\n    \"epochs_run\": 15,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.8707\n   }\n  ],\n  \"primary_revised\": [\n   {\n    \"best_epoch\": 0,\n    \"epochs_run\": 15,\n    \"stopped_because\": \"no validation improvement for 15 epochs\",\n    \"best_val_score\": 0.8707\n   }\n  ]\n },\n \"test\": {\n  \"primary\": \"primary\",\n  \"primary_metric\": \"retrieval_mean_recall_at_10\",\n  \"n_folds\": 1,\n  \"chance_recall_at_10\": 0.002,\n  \"gallery_size_for_recall\": 1000,\n  \"probe_chance_macro_f1\": 0.166667,\n  \"prediction_method_rule\": \"a configuration's own regression head if it has one, else kNN in its joint space; fixed in advance, never chosen on test data\",\n  \"results\": {\n   \"retrieval_mean_recall_at_10\": [\n    {\n     \"name\": \"primary\",\n     \"kind\": \"configuration\",\n     \"value\": 0.7902,\n     \"sd\": null,\n     \"lo\": 0.7795,\n     \"hi\": 0.8001,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.7902\n     ]\n    },\n    {\n     \"name\": \"partial_finetune\",\n     \"kind\": \"configuration\",\n     \"value\": 0.7902,\n     \"sd\": null,\n     \"lo\": 0.7795,\n     \"hi\": 0.8001,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.7902\n     ]\n    },\n    {\n     \"name\": \"contrastive_only\",\n     \"kind\": \"configuration\",\n     \"value\": 0.7902,\n     \"sd\": null,\n     \"lo\": 0.7795,\n     \"hi\": 0.8001,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.7902\n     ]\n    },\n    {\n     \"name\": \"primary_revised\",\n     \"kind\": \"configuration\",\n     \"value\": 0.7902,\n     \"sd\": null,\n     \"lo\": 0.7795,\n     \"hi\": 0.8001,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.7902\n     ]\n    },\n    {\n     \"name\": \"zero_shot\",\n     \"kind\": \"baseline\",\n     \"value\": 0.7902,\n     \"sd\": null,\n     \"lo\": 0.7795,\n     \"hi\": 0.8001,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.7902\n     ]\n    },\n    {\n     \"name\": \"cca\",\n     \"kind\": \"baseline\",\n     \"value\": 0.6385,\n     \"sd\": null,\n     \"lo\": 0.6255,\n     \"hi\": 0.6502,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.6385\n     ]\n    }\n   ],\n   \"prediction_mean_pearson_top50\": [],\n   \"probe_macro_f1\": [\n    {\n     \"name\": \"late_fusion (average)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.938787,\n     \"sd\": null,\n     \"lo\": 0.930661,\n     \"hi\": 0.946497,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.9388\n     ]\n    },\n    {\n     \"name\": \"primary (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.93758,\n     \"sd\": null,\n     \"lo\": 0.929517,\n     \"hi\": 0.945503,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.9376\n     ]\n    },\n    {\n     \"name\": \"contrastive_only (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.93758,\n     \"sd\": null,\n     \"lo\": 0.929517,\n     \"hi\": 0.945503,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.9376\n     ]\n    },\n    {\n     \"name\": \"primary_revised (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.93758,\n     \"sd\": null,\n     \"lo\": 0.929517,\n     \"hi\": 0.945503,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.9376\n     ]\n    },\n    {\n     \"name\": \"zero_shot (fused)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.93758,\n     \"sd\": null,\n     \"lo\": 0.929517,\n     \"hi\": 0.945503,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.9376\n     ]\n    },\n    {\n     \"name\": \"early_fusion (concat)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.937233,\n     \"sd\": null,\n     \"lo\": 0.928958,\n     \"hi\": 0.94487,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.9372\n     ]\n    },\n    {\n     \"name\": \"partial_finetune (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.93381,\n     \"sd\": null,\n     \"lo\": 0.921835,\n     \"hi\": 0.943958,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.9338\n     ]\n    },\n    {\n     \"name\": \"cca (fused)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.932481,\n     \"sd\": null,\n     \"lo\": 0.923611,\n     \"hi\": 0.94079,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.9325\n     ]\n    },\n    {\n     \"name\": \"cca (image)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.929476,\n     \"sd\": null,\n     \"lo\": 0.917239,\n     \"hi\": 0.939514,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.9295\n     ]\n    },\n    {\n     \"name\": \"primary (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.921346,\n     \"sd\": null,\n     \"lo\": 0.90401,\n     \"hi\": 0.934709,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.9213\n     ]\n    },\n    {\n     \"name\": \"contrastive_only (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.921346,\n     \"sd\": null,\n     \"lo\": 0.90401,\n     \"hi\": 0.934709,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.9213\n     ]\n    },\n    {\n     \"name\": \"primary_revised (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.921346,\n     \"sd\": null,\n     \"lo\": 0.90401,\n     \"hi\": 0.934709,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.9213\n     ]\n    },\n    {\n     \"name\": \"partial_finetune (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.921194,\n     \"sd\": null,\n     \"lo\": 0.903903,\n     \"hi\": 0.934496,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.9212\n     ]\n    },\n    {\n     \"name\": \"unimodal (image)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.921042,\n     \"sd\": null,\n     \"lo\": 0.90377,\n     \"hi\": 0.934173,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.921\n     ]\n    },\n    {\n     \"name\": \"zero_shot (image)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.921042,\n     \"sd\": null,\n     \"lo\": 0.90377,\n     \"hi\": 0.934173,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.921\n     ]\n    },\n    {\n     \"name\": \"cca (text)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.896303,\n     \"sd\": null,\n     \"lo\": 0.878527,\n     \"hi\": 0.911086,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.8963\n     ]\n    },\n    {\n     \"name\": \"unimodal (text)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.895568,\n     \"sd\": null,\n     \"lo\": 0.877957,\n     \"hi\": 0.911266,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.8956\n     ]\n    },\n    {\n     \"name\": \"zero_shot (text)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.895568,\n     \"sd\": null,\n     \"lo\": 0.877957,\n     \"hi\": 0.911266,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.8956\n     ]\n    },\n    {\n     \"name\": \"primary (text)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.893224,\n     \"sd\": null,\n     \"lo\": 0.874738,\n     \"hi\": 0.909346,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.8932\n     ]\n    },\n    {\n     \"name\": \"partial_finetune (text)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.893224,\n     \"sd\": null,\n     \"lo\": 0.874738,\n     \"hi\": 0.909346,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.8932\n     ]\n    },\n    {\n     \"name\": \"contrastive_only (text)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.893224,\n     \"sd\": null,\n     \"lo\": 0.874738,\n     \"hi\": 0.909346,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.8932\n     ]\n    },\n    {\n     \"name\": \"primary_revised (text)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.893224,\n     \"sd\": null,\n     \"lo\": 0.874738,\n     \"hi\": 0.909346,\n     \"interval\": \"bootstrap 95% interval\",\n     \"per_fold\": [\n      0.8932\n     ]\n    }\n   ],\n   \"clustering_ari\": [\n    {\n     \"name\": \"primary (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.611099,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.6111\n     ]\n    },\n    {\n     \"name\": \"partial_finetune (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.611099,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.6111\n     ]\n    },\n    {\n     \"name\": \"contrastive_only (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.611099,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.6111\n     ]\n    },\n    {\n     \"name\": \"primary_revised (fused)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.611099,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.6111\n     ]\n    },\n    {\n     \"name\": \"zero_shot (fused)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.611099,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.6111\n     ]\n    },\n    {\n     \"name\": \"primary (text)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.554688,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.5547\n     ]\n    },\n    {\n     \"name\": \"partial_finetune (text)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.554688,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.5547\n     ]\n    },\n    {\n     \"name\": \"contrastive_only (text)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.554688,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.5547\n     ]\n    },\n    {\n     \"name\": \"primary_revised (text)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.554688,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.5547\n     ]\n    },\n    {\n     \"name\": \"unimodal (text)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.554688,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.5547\n     ]\n    },\n    {\n     \"name\": \"zero_shot (text)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.554688,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.5547\n     ]\n    },\n    {\n     \"name\": \"primary (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.503215,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.5032\n     ]\n    },\n    {\n     \"name\": \"partial_finetune (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.503215,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.5032\n     ]\n    },\n    {\n     \"name\": \"contrastive_only (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.503215,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.5032\n     ]\n    },\n    {\n     \"name\": \"primary_revised (image)\",\n     \"kind\": \"configuration\",\n     \"value\": 0.503215,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.5032\n     ]\n    },\n    {\n     \"name\": \"unimodal (image)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.503215,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.5032\n     ]\n    },\n    {\n     \"name\": \"zero_shot (image)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.503215,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.5032\n     ]\n    },\n    {\n     \"name\": \"cca (fused)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.30069,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.3007\n     ]\n    },\n    {\n     \"name\": \"cca (image)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.173153,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.1732\n     ]\n    },\n    {\n     \"name\": \"cca (text)\",\n     \"kind\": \"baseline\",\n     \"value\": 0.138184,\n     \"sd\": null,\n     \"lo\": null,\n     \"hi\": null,\n     \"interval\": \"\",\n     \"per_fold\": [\n      0.1382\n     ]\n    }\n   ]\n  },\n  \"retrieval\": [\n   {\n    \"representation\": \"primary\",\n    \"R@1\": 0.3827,\n    \"R@5\": 0.6804,\n    \"R@10\": 0.7902,\n    \"median_rank\": 2.0,\n    \"a_to_b_R@10\": 0.789,\n    \"b_to_a_R@10\": 0.7914,\n    \"chance_R@10\": 0.002,\n    \"label_match_at_10\": 0.938741,\n    \"label_match_chance\": 0.261676,\n    \"gallery1000_R@10\": 0.941\n   },\n   {\n    \"representation\": \"partial_finetune\",\n    \"R@1\": 0.3828,\n    \"R@5\": 0.6804,\n    \"R@10\": 0.7902,\n    \"median_rank\": 2.0,\n    \"a_to_b_R@10\": 0.789,\n    \"b_to_a_R@10\": 0.7914,\n    \"chance_R@10\": 0.002,\n    \"label_match_at_10\": 0.938771,\n    \"label_match_chance\": 0.261676,\n    \"gallery1000_R@10\": 0.9409\n   },\n   {\n    \"representation\": \"contrastive_only\",\n    \"R@1\": 0.3827,\n    \"R@5\": 0.6804,\n    \"R@10\": 0.7902,\n    \"median_rank\": 2.0,\n    \"a_to_b_R@10\": 0.789,\n    \"b_to_a_R@10\": 0.7914,\n    \"chance_R@10\": 0.002,\n    \"label_match_at_10\": 0.938741,\n    \"label_match_chance\": 0.261676,\n    \"gallery1000_R@10\": 0.941\n   },\n   {\n    \"representation\": \"primary_revised\",\n    \"R@1\": 0.3827,\n    \"R@5\": 0.6804,\n    \"R@10\": 0.7902,\n    \"median_rank\": 2.0,\n    \"a_to_b_R@10\": 0.789,\n    \"b_to_a_R@10\": 0.7914,\n    \"chance_R@10\": 0.002,\n    \"label_match_at_10\": 0.938741,\n    \"label_match_chance\": 0.261676,\n    \"gallery1000_R@10\": 0.941\n   },\n   {\n    \"representation\": \"cca\",\n    \"R@1\": 0.2686,\n    \"R@5\": 0.5191,\n    \"R@10\": 0.6385,\n    \"median_rank\": 5.0,\n    \"a_to_b_R@10\": 0.6342,\n    \"b_to_a_R@10\": 0.6428,\n    \"chance_R@10\": 0.002,\n    \"label_match_at_10\": 0.821387,\n    \"label_match_chance\": 0.261676,\n    \"gallery1000_R@10\": 0.8564\n   },\n   {\n    \"representation\": \"zero_shot\",\n    \"R@1\": 0.3827,\n    \"R@5\": 0.6804,\n    \"R@10\": 0.7902,\n    \"median_rank\": 2.0,\n    \"a_to_b_R@10\": 0.789,\n    \"b_to_a_R@10\": 0.7914,\n    \"chance_R@10\": 0.002,\n    \"label_match_at_10\": 0.938741,\n    \"label_match_chance\": 0.261676,\n    \"gallery1000_R@10\": 0.941\n   }\n  ],\n  \"prediction\": [],\n  \"comparisons\": [\n   {\n    \"metric\": \"retrieval_mean_recall_at_10\",\n    \"primary\": \"primary\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.7902,\n    \"alternative_value\": 0.6385,\n    \"difference_mean\": 0.1517,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 1,\n    \"n_folds\": 1,\n    \"difference_ci95\": [\n     0.141192,\n     0.162002\n    ],\n    \"primary_ci95\": [\n     0.7795,\n     0.8001\n    ],\n    \"alternative_ci95\": [\n     0.6255,\n     0.6502\n    ]\n   },\n   {\n    \"metric\": \"retrieval_mean_recall_at_10\",\n    \"primary\": \"primary\",\n    \"alternative\": \"zero_shot\",\n    \"primary_value\": 0.7902,\n    \"alternative_value\": 0.7902,\n    \"difference_mean\": 0.0,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 0,\n    \"n_folds\": 1,\n    \"difference_ci95\": [\n     0.0,\n     0.0\n    ],\n    \"primary_ci95\": [\n     0.7795,\n     0.8001\n    ],\n    \"alternative_ci95\": [\n     0.7795,\n     0.8001\n    ]\n   },\n   {\n    \"metric\": \"probe_macro_f1\",\n    \"primary\": \"primary\",\n    \"alternative\": \"unimodal\",\n    \"primary_value\": 0.93758,\n    \"alternative_value\": 0.921042,\n    \"difference_mean\": 0.016538,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 1,\n    \"n_folds\": 1,\n    \"difference_ci95\": [\n     0.005196,\n     0.033111\n    ],\n    \"primary_ci95\": [\n     0.929517,\n     0.945503\n    ],\n    \"alternative_ci95\": [\n     0.90377,\n     0.934173\n    ]\n   },\n   {\n    \"metric\": \"probe_macro_f1\",\n    \"primary\": \"primary\",\n    \"alternative\": \"early_fusion\",\n    \"primary_value\": 0.93758,\n    \"alternative_value\": 0.937233,\n    \"difference_mean\": 0.000348,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 1,\n    \"n_folds\": 1,\n    \"difference_ci95\": [\n     -0.002693,\n     0.003549\n    ],\n    \"primary_ci95\": [\n     0.929517,\n     0.945503\n    ],\n    \"alternative_ci95\": [\n     0.928958,\n     0.94487\n    ]\n   },\n   {\n    \"metric\": \"probe_macro_f1\",\n    \"primary\": \"primary\",\n    \"alternative\": \"late_fusion\",\n    \"primary_value\": 0.93758,\n    \"alternative_value\": 0.938787,\n    \"difference_mean\": -0.001206,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 0,\n    \"n_folds\": 1,\n    \"difference_ci95\": [\n     -0.004029,\n     0.001781\n    ],\n    \"primary_ci95\": [\n     0.929517,\n     0.945503\n    ],\n    \"alternative_ci95\": [\n     0.930661,\n     0.946497\n    ]\n   },\n   {\n    \"metric\": \"probe_macro_f1\",\n    \"primary\": \"primary\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.93758,\n    \"alternative_value\": 0.932481,\n    \"difference_mean\": 0.005099,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 1,\n    \"n_folds\": 1,\n    \"difference_ci95\": [\n     0.001656,\n     0.00839\n    ],\n    \"primary_ci95\": [\n     0.929517,\n     0.945503\n    ],\n    \"alternative_ci95\": [\n     0.923611,\n     0.94079\n    ]\n   },\n   {\n    \"metric\": \"probe_macro_f1\",\n    \"primary\": \"primary\",\n    \"alternative\": \"zero_shot\",\n    \"primary_value\": 0.93758,\n    \"alternative_value\": 0.93758,\n    \"difference_mean\": 0.0,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 0,\n    \"n_folds\": 1,\n    \"difference_ci95\": [\n     0.0,\n     0.0\n    ],\n    \"primary_ci95\": [\n     0.929517,\n     0.945503\n    ],\n    \"alternative_ci95\": [\n     0.929517,\n     0.945503\n    ]\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"primary\",\n    \"alternative\": \"unimodal\",\n    \"primary_value\": 0.611099,\n    \"alternative_value\": 0.554688,\n    \"difference_mean\": 0.056411,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 1,\n    \"n_folds\": 1\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"primary\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.611099,\n    \"alternative_value\": 0.30069,\n    \"difference_mean\": 0.310409,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 1,\n    \"n_folds\": 1\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"primary\",\n    \"alternative\": \"zero_shot\",\n    \"primary_value\": 0.611099,\n    \"alternative_value\": 0.611099,\n    \"difference_mean\": 0.0,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 0,\n    \"n_folds\": 1\n   }\n  ],\n  \"flags\": [\n   {\n    \"code\": \"no_clear_gain_over_zero_shot\",\n    \"severity\": \"info\",\n    \"metric\": \"retrieval_mean_recall_at_10\",\n    \"value\": 0.0,\n    \"message\": \"No clear difference between the primary configuration and zero_shot on retrieval_mean_recall_at_10 (difference +0.000, 95% CI +0.000 to +0.000).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_early_fusion\",\n    \"severity\": \"info\",\n    \"metric\": \"probe_macro_f1\",\n    \"value\": 0.000348,\n    \"message\": \"No clear difference between the primary configuration and early_fusion on probe_macro_f1 (difference +0.000, 95% CI -0.003 to +0.004).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_late_fusion\",\n    \"severity\": \"info\",\n    \"metric\": \"probe_macro_f1\",\n    \"value\": -0.001206,\n    \"message\": \"No clear difference between the primary configuration and late_fusion on probe_macro_f1 (difference -0.001, 95% CI -0.004 to +0.002).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_zero_shot\",\n    \"severity\": \"info\",\n    \"metric\": \"probe_macro_f1\",\n    \"value\": 0.0,\n    \"message\": \"No clear difference between the primary configuration and zero_shot on probe_macro_f1 (difference +0.000, 95% CI +0.000 to +0.000).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_zero_shot\",\n    \"severity\": \"info\",\n    \"metric\": \"clustering_ari\",\n    \"value\": 0.0,\n    \"message\": \"No clear difference between the primary configuration and zero_shot on clustering_ari (mean difference +0.000; primary better in 0/1 folds).\"\n   }\n  ]\n },\n \"validation\": {\n  \"comparisons\": [\n   {\n    \"metric\": \"retrieval_mean_recall_at_10\",\n    \"primary\": \"primary\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.870685,\n    \"alternative_value\": 0.75988,\n    \"difference_mean\": 0.110805,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 1,\n    \"n_folds\": 1,\n    \"difference_ci95\": [\n     0.097549,\n     0.123818\n    ],\n    \"primary_ci95\": [\n     0.856928,\n     0.884442\n    ],\n    \"alternative_ci95\": [\n     0.742871,\n     0.776888\n    ]\n   },\n   {\n    \"metric\": \"retrieval_mean_recall_at_10\",\n    \"primary\": \"primary\",\n    \"alternative\": \"zero_shot\",\n    \"primary_value\": 0.870685,\n    \"alternative_value\": 0.870685,\n    \"difference_mean\": 0.0,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 0,\n    \"n_folds\": 1,\n    \"difference_ci95\": [\n     0.0,\n     0.0\n    ],\n    \"primary_ci95\": [\n     0.856928,\n     0.884442\n    ],\n    \"alternative_ci95\": [\n     0.856928,\n     0.884442\n    ]\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"primary\",\n    \"alternative\": \"unimodal\",\n    \"primary_value\": 0.508473,\n    \"alternative_value\": 0.512181,\n    \"difference_mean\": -0.003708,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 0,\n    \"n_folds\": 1\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"primary\",\n    \"alternative\": \"cca\",\n    \"primary_value\": 0.508473,\n    \"alternative_value\": 0.244205,\n    \"difference_mean\": 0.264268,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 1,\n    \"n_folds\": 1\n   },\n   {\n    \"metric\": \"clustering_ari\",\n    \"primary\": \"primary\",\n    \"alternative\": \"zero_shot\",\n    \"primary_value\": 0.508473,\n    \"alternative_value\": 0.508473,\n    \"difference_mean\": 0.0,\n    \"difference_sd\": null,\n    \"folds_primary_better\": 0,\n    \"n_folds\": 1\n   }\n  ],\n  \"flags\": [\n   {\n    \"code\": \"no_clear_gain_over_zero_shot\",\n    \"severity\": \"info\",\n    \"metric\": \"retrieval_mean_recall_at_10\",\n    \"value\": 0.0,\n    \"message\": \"No clear difference between the primary configuration and zero_shot on retrieval_mean_recall_at_10 (difference +0.000, 95% CI +0.000 to +0.000).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_unimodal\",\n    \"severity\": \"info\",\n    \"metric\": \"clustering_ari\",\n    \"value\": -0.003708,\n    \"message\": \"No clear difference between the primary configuration and unimodal on clustering_ari (mean difference -0.004; primary better in 0/1 folds).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_zero_shot\",\n    \"severity\": \"info\",\n    \"metric\": \"clustering_ari\",\n    \"value\": 0.0,\n    \"message\": \"No clear difference between the primary configuration and zero_shot on clustering_ari (mean difference +0.000; primary better in 0/1 folds).\"\n   }\n  ]\n },\n \"critic\": {\n  \"action\": \"modify_primary\",\n  \"target\": null,\n  \"changes\": {\n   \"training.lr\": 3e-05,\n   \"training.weight_decay\": 0.01\n  },\n  \"assessment\": \"Retrieval is strong in absolute terms (mean R@10 0.871 vs chance 0.005, +0.111 over CCA with CI 0.098\\u20130.124), but the trained primary is exactly the zero-shot BiomedCLIP solution: every configuration selected epoch 0 (the identity residual init), so training contributed nothing. Classification structure (ARI 0.509) equals zero-shot and is on par with the unimodal baseline (0.512). The results are adequate as a zero-shot solution, but the learned heads do not yet improve on it.\",\n  \"rationale\": \"In all trained configurations, validation R@10 drops right after the first epoch (primary 0.871 \\u2192 0.856 \\u2192 0.830) while training loss falls steadily (2.34 \\u2192 0.60). The same happens in contrastive_only, so the CE term is not the cause. At lr 1e-3, one epoch (about 40 steps at batch 512) moves the residual heads well away from an already well-aligned BiomedCLIP space; this data is likely close to BiomedCLIP's PMC pretraining distribution. A roughly 30\\u00d7 smaller learning rate with stronger weight decay keeps the heads near identity and gives the best chance of a small in-domain gain before overfitting starts. Partial fine-tuning is no option: it also degraded (0.853 after one epoch) and does not fit the 180 s per-fit cap. The revision costs 180 s of the 1140 s left, and the zero-shot result stands if validation does not improve.\",\n  \"source\": \"llm\",\n  \"triggers\": [\n   {\n    \"code\": \"no_clear_gain_over_zero_shot\",\n    \"severity\": \"info\",\n    \"message\": \"No clear difference between the primary configuration and zero_shot on retrieval_mean_recall_at_10 (difference +0.000, 95% CI +0.000 to +0.000).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_unimodal\",\n    \"severity\": \"info\",\n    \"message\": \"No clear difference between the primary configuration and unimodal on clustering_ari (mean difference -0.004; primary better in 0/1 folds).\"\n   },\n   {\n    \"code\": \"no_clear_gain_over_zero_shot\",\n    \"severity\": \"info\",\n    \"message\": \"No clear difference between the primary configuration and zero_shot on clustering_ari (mean difference +0.000; primary better in 0/1 folds).\"\n   }\n  ]\n },\n \"revision\": {\n  \"action\": \"modify_primary\",\n  \"ran\": true,\n  \"kept\": false,\n  \"original_val\": [\n   0.870685\n  ],\n  \"original_val_mean\": 0.870685,\n  \"target\": \"primary_revised\",\n  \"revised_val\": [\n   0.870685\n  ],\n  \"revised_val_mean\": 0.870685,\n  \"changes\": {\n   \"training.lr\": 3e-05,\n   \"training.weight_decay\": 0.01\n  }\n },\n \"downstream\": {\n  \"fold\": \"predefined\",\n  \"classification\": {\n   \"view\": \"image\",\n   \"macro_f1\": 0.921346,\n   \"balanced_accuracy\": 0.971794,\n   \"per_class_f1\": {\n    \"Magnetic Resonance Imaging\": 0.941021,\n    \"Plain x-ray\": 0.938005,\n    \"Positron-Emission Tomography\": 0.93617,\n    \"Ultrasonography\": 0.999378,\n    \"X-Ray Computed Tomography\": 0.974445,\n    \"angiogram\": 0.739054\n   }\n  },\n  \"retrieval_examples\": {\n   \"a_to_b\": [\n    {\n     \"query_label\": \"angiogram\",\n     \"partner_rank\": 2,\n     \"top5_same_label\": 5\n    },\n    {\n     \"query_label\": \"Positron-Emission Tomography\",\n     \"partner_rank\": 1,\n     \"top5_same_label\": 2\n    },\n    {\n     \"query_label\": \"Plain x-ray\",\n     \"partner_rank\": 1,\n     \"top5_same_label\": 5\n    },\n    {\n     \"query_label\": \"Ultrasonography\",\n     \"partner_rank\": 2,\n     \"top5_same_label\": 5\n    }\n   ],\n   \"b_to_a\": [\n    {\n     \"query_label\": \"angiogram\",\n     \"partner_rank\": 1,\n     \"top5_same_label\": 5\n    },\n    {\n     \"query_label\": \"X-Ray Computed Tomography\",\n     \"partner_rank\": 1,\n     \"top5_same_label\": 5\n    },\n    {\n     \"query_label\": \"Magnetic Resonance Imaging\",\n     \"partner_rank\": 7,\n     \"top5_same_label\": 5\n    },\n    {\n     \"query_label\": \"Plain x-ray\",\n     \"partner_rank\": 2,\n     \"top5_same_label\": 1\n    }\n   ]\n  }\n },\n \"llm\": {\n  \"model_requested\": \"claude-opus-5-5\",\n  \"models_used\": [\n   \"claude-opus-5-5\"\n  ],\n  \"n_calls\": 2,\n  \"total_cost_usd\": 0.4072\n }\n}",
+   "schema": {
+    "properties": {
+     "executive_summary": {
+      "title": "Executive Summary",
+      "type": "string"
+     },
+     "data_and_objective": {
+      "title": "Data And Objective",
+      "type": "string"
+     },
+     "decisions_explained": {
+      "title": "Decisions Explained",
+      "type": "string"
+     },
+     "results_interpretation": {
+      "title": "Results Interpretation",
+      "type": "string"
+     },
+     "integration_benefit": {
+      "title": "Integration Benefit",
+      "type": "string"
+     },
+     "critic_and_revision": {
+      "title": "Critic And Revision",
+      "type": "string"
+     },
+     "limitations": {
+      "title": "Limitations",
+      "type": "string"
+     }
+    },
+    "required": [
+     "executive_summary",
+     "data_and_objective",
+     "decisions_explained",
+     "results_interpretation",
+     "integration_benefit",
+     "critic_and_revision",
+     "limitations"
+    ],
+    "title": "WriterReply",
+    "type": "object"
+   },
+   "text": "{\"executive_summary\": \"The goal was a joint image\\u2013caption embedding for image\\u2013text retrieval (the primary task) and classification of imaging modality into 6 classes. The agent used the predefined split (20,000 train / 1,999 validation / 5,000 test), frozen BiomedCLIP image and text encoders, and residual 512-d projection heads trained with InfoNCE plus a supervised cross-entropy (CE) term at weight 0.5.\\n\\n**Training added nothing.** Every trained configuration chose epoch 0, the identity starting point of the residual heads. So the \\\"learned\\\" model is the pretrained (zero-shot) BiomedCLIP space. This held for the primary model, the contrastive-only model, partial fine-tuning and the critic's lower-learning-rate revision.\\n\\n**Retrieval.** On the held-out test set, mean R@10 was 0.7902 (bootstrap 95% interval 0.7795\\u20130.8001), against a chance level of 0.002. This is +0.1517 over CCA (95% CI 0.141\\u20130.162) and exactly equal to zero-shot (difference 0.000, CI 0.000 to 0.000).\\n\\n**Classification.** A linear probe on the fused embedding reached macro-F1 0.938 (0.930\\u20130.946), against a chance level of 0.167. That beats the image-only features by 0.017 (CI 0.005\\u20130.033) but ties simple early fusion (difference 0.000, CI \\u22120.003 to 0.004) and late fusion (difference \\u22120.001, CI \\u22120.004 to 0.002).\\n\\n**Bottom line:** pretrained BiomedCLIP is a strong solution here. Fusing the two modalities helps classification compared with one modality alone. The training in this run did not improve on either. The absolute scores may also be inflated, because BiomedCLIP's pretraining data may overlap this dataset.\", \"data_and_objective\": \"**Size and pairing.** 27,000 samples; 26,999 have both an image and a caption, and the 1 incomplete sample was dropped from alignment. With about 19,999 training pairs, contrastive alignment is feasible, and a batch of 512 gives 511 negatives per positive.\\n\\n**Label.** `modality` has 6 classes and is present on 99.1% of samples (26,756). It is strongly imbalanced (imbalance ratio 63.857):\\n- X-Ray Computed Tomography: 9,387\\n- Plain x-ray: 7,449\\n- Positron-Emission Tomography (PET): 147\\n\\nBecause of this, macro-F1 is the sensitive metric, and the agent cited it as the reason for adding the supervised CE term.\\n\\n**Images.** 70% are greyscale (0.704), so luminance was copied to three channels to fit the pretrained encoders. There were no near-duplicate images (0.0).\\n\\n**Captions.** Short: median 17 words, 95% have 49 words or fewer, and 2.6% exceed 60 words. Vocabulary is 17,825 distinct words, and about 1% of captions are near-duplicates (0.009963). This drove the choice of text truncation length.\\n\\n**Groups and split.**\\n- There are 21,341 `article` groups, and the data come with a predefined 20,000 / 2,000 / 5,000 split.\\n- That split is **not grouped by article** (\\\"Test groups: none (not grouped)\\\").\\n- 19% of test samples share an article with a validation sample, so choices made on validation may flatter test results slightly.\\n- How many articles train and test share is not reported.\\n\\n**Domain.** The captions are figure captions grouped by article. That is the same kind of material as BiomedCLIP's PMC-15M pretraining corpus, which raises a contamination concern.\", \"decisions_explained\": \"- **Split:** the predefined split was used so results are comparable with other work and the test set stays unseen. Models were selected on validation only, and the test set was scored once, after the critic. The cost: there is only one fold, so uncertainty comes from bootstrap intervals rather than spread across folds. The 19% validation\\u2013test article overlap was noted.\\n- **Strategy:** CLIP-style contrastive alignment (InfoNCE). The objective needs a shared space, and there are about 19,999 training pairs.\\n- **Encoders:** 4 image \\u00d7 4 text candidates were screened on 2,000 training and 500 validation samples drawn from separate groups.\\n  - BiomedCLIP image + text scored alignment R@10 0.966 (zero-shot; 0.917 with CCA).\\n  - The next best pair, BiomedCLIP image + PubMedBERT, scored 0.599. DINOv2 + BiomedCLIP text scored 0.511.\\n  - For images, BiomedCLIP's probe macro-F1 (0.934) led DINOv2 (0.914), CLIP-B/16 (0.915) and ResNet-50 (0.895 at best).\\n  - The agent later warned that BiomedCLIP's advantage may be inflated by overlap with its pretraining data.\\n- **Preprocessing:**\\n  - Greyscale images were copied to RGB.\\n  - The text cap was raised by the LLM planner from 80 to 128 tokens. Biomedical words split into more subword tokens, and features are computed once, so the longer cap costs almost nothing.\\n- **Heads:** residual 512-d heads that start as the identity, so training begins from the zero-shot solution and epoch 0 can itself be selected. The rule-based log said \\\"embed 256\\\"; the LLM corrected this to 512 to keep the pretrained dimension.\\n- **Training settings:**\\n  - lr 0.001, batch 512, dropout 0.1.\\n  - Temperature learned, starting from 0.07.\\n  - Early stopping with patience 15, and a 180 s cap per fit.\\n- **Losses:** InfoNCE (weight 1.0) plus CE on `modality` (weight 0.5), since the objective asks for classification. A `contrastive_only` comparison tests whether the CE term costs retrieval.\\n- **Regime:** backbones frozen, which means few trainable parameters and low variance. Partial fine-tuning of the last 2 blocks was run as a comparison, with a 1,200 s budget and batch size raised from 64 to 128. The larger batch keeps the number of negatives from being confounded with fine-tuning.\\n- **Evaluation:** the primary metric is mean R@10 for retrieval. Baselines: each modality alone, CCA, early fusion, late fusion, zero-shot and chance. The zero-shot baseline is kept but flagged as possibly optimistic.\", \"results_interpretation\": \"**Retrieval (test, 5,000 pairs)**\\n- **Primary model (= zero-shot):**\\n  - Mean R@10 0.7902 (0.7795\\u20130.8001), far above the chance level of 0.002.\\n  - R@1 0.3827, R@5 0.6804, median rank 2.0.\\n  - Both directions are similar: image\\u2192text 0.789, text\\u2192image 0.7914.\\n  - On a standardised gallery of 1,000, R@10 is 0.941.\\n- **CCA:** R@10 0.6385 (0.6255\\u20130.6502), median rank 5.0, gallery-1,000 R@10 0.8564. The primary model beats CCA by 0.1517 (CI 0.141\\u20130.162); the interval excludes zero.\\n- **Validation to test:** validation R@10 was 0.871. Test is lower (0.7902), most likely partly because the test gallery is larger, which makes R@10 harder.\\n- **Label consistency:** 0.939 of the top-10 neighbours share the query's modality, against a chance level of 0.262 (CCA: 0.821).\\n\\n**Classification (linear probe macro-F1; chance level 0.167)**\\n- Fused embedding: 0.938 (0.930\\u20130.946).\\n- Image view: 0.921 (0.904\\u20130.935).\\n- Text view: 0.893 (0.875\\u20130.909).\\n- The text view sits slightly below the unimodal text baseline (0.896), with heavily overlapping intervals.\\n- Detailed results for the image view: balanced accuracy 0.972, macro-F1 0.921.\\n  - Per-class F1 is high for Ultrasonography (0.999), CT (0.974), MRI (0.941), Plain x-ray (0.938) and even PET (0.936), despite PET having only 147 samples.\\n  - Angiogram is the clear weak class (0.739).\\n\\n**Clustering (ARI; point estimates only, no intervals)**\\n- Test: fused 0.611, against text-only 0.555, image-only 0.503 and CCA fused 0.301.\\n- Validation reverses part of this: primary 0.508 against the unimodal baseline's 0.512 (difference \\u22120.004).\\n- With no intervals and one fold, the test-set clustering advantage should be treated as unconfirmed.\\n\\n**Configurations compared**\\n- `primary`, `contrastive_only`, `primary_revised` and `zero_shot` produced identical test metrics.\\n- `partial_finetune` differed only negligibly: R@1 0.3828 and fused probe 0.934.\\n- So neither the CE term nor fine-tuning changed anything measurable. None of these comparisons tells us whether CE or fine-tuning *would* help if training had moved the heads away from the identity starting point.\", \"integration_benefit\": \"**Two modalities against one: yes, for classification.**\\n- Fused macro-F1 0.938 against image-only 0.921: difference +0.017, CI 0.005\\u20130.033, which excludes zero.\\n- Text-only is lower still (0.896).\\n- Test clustering ARI also favours fusion (0.611 against 0.555; difference 0.056), but there is no interval and validation showed no gain (\\u22120.004).\\n\\n**Against linear alignment (CCA): yes, clearly.**\\n- Retrieval R@10 +0.1517 (CI 0.141\\u20130.162).\\n- Probe macro-F1 +0.005 (CI 0.002\\u20130.008): small but excludes zero.\\n- ARI 0.611 against 0.301.\\n- Caveat: CCA was fit on the BiomedCLIP features, so this gap reflects the pretrained contrastive alignment against a linear re-alignment of the same features.\\n\\n**Against simple fusion of unimodal features: tie.**\\n- Early fusion (concatenation): difference +0.000 (CI \\u22120.003 to 0.004).\\n- Late fusion (averaging): difference \\u22120.001 (CI \\u22120.004 to 0.002).\\n- Both intervals include zero.\\n\\n**Against zero-shot BiomedCLIP: identical.** Differences were exactly 0.000 on retrieval, probe and ARI.\\n\\n**Interpretation.** The benefit comes from combining the image and caption information that the pretrained BiomedCLIP encoders already extract. Plain concatenation or averaging captures it just as well. The joint heads trained in this run added nothing, because the selected checkpoint is the untrained identity. Tying simpler methods is the finding.\", \"critic_and_revision\": \"**Triggers.** Three informational flags fired on validation:\\n- no gain over zero-shot on R@10 (difference +0.000, CI 0.000 to 0.000);\\n- no gain over the unimodal baseline on ARI (\\u22120.004);\\n- no gain over zero-shot on ARI (+0.000).\\n\\n**Assessment.** Retrieval is strong in absolute terms (validation R@10 0.871 against a chance level of 0.005, and +0.111 over CCA with CI 0.098\\u20130.124). However, every configuration selected epoch 0, so \\\"training contributed nothing.\\\"\\n\\n**Diagnosis.** Training was moving the heads too far, too fast:\\n- Validation R@10 fell right after the first epoch (0.871 \\u2192 0.856 \\u2192 0.830) while training loss fell steadily (2.34 \\u2192 0.60).\\n- The same happened in `contrastive_only`, so the CE term was not the cause.\\n- Partial fine-tuning also degraded (0.853 after one epoch).\\n- The critic attributed this to lr 1e-3 pushing the heads away from an already well-aligned space, on data likely close to BiomedCLIP's PMC pretraining distribution.\\n\\n**Revision.** It ran with lr 3e-05 and weight decay 0.01. It again chose epoch 0: validation R@10 0.8707 revised against 0.8707 original (difference +0.0000). It was **discarded**, and the original (zero-shot-equivalent) result stands. Test data were scored only after this decision.\", \"limitations\": \"- **Possible pretraining contamination.** BiomedCLIP was pretrained on PMC-15M figure\\u2013caption pairs, and this dataset is figure captions grouped by article. Overlap would inflate the zero-shot/primary scores (screening 0.966, test 0.7902) and the margin over non-BiomedCLIP encoders and CCA. The run cannot rule this out.\\n- **No learned contribution.** All configurations selected epoch 0, including at lr 3e-05. The run therefore evaluates pretrained BiomedCLIP, not a trained joint model. Whether a smaller intervention, such as tuning only the temperature or using even lower learning rates, could help remains untested.\\n- **The CE term and fine-tuning are uninformative.** Because every model sits at the identity, the comparisons with `contrastive_only` and `partial_finetune` cannot answer their intended questions. Partial fine-tuning also ran only 2 epochs.\\n- **Single fold.** There is only one predefined split. Uncertainty comes from bootstrap intervals over test samples, not across folds. Clustering ARI has no interval at all.\\n- **Split not grouped by article.** 19% of test samples share an article with a validation sample. Train\\u2013test article overlap is not reported. Both could make held-out estimates optimistic.\\n- **Clustering is inconsistent.** The fused ARI advantage on test (0.611 against 0.555) was not seen on validation (0.508 against 0.512).\\n- **Gallery size.** R@10 depends on gallery size: chance is 0.002 on test and 0.005 on validation. Compare across studies using the gallery-1,000 figure (0.941) or with matched galleries.\\n- **Weak class and small class.** Angiogram F1 is only 0.739. PET has 147 samples in total, so its per-class F1 (0.936) rests on few test cases.\\n- **Screening sample.** Encoders were chosen on a 2,000/500 subsample. That was adequate here given the large margin, but it is still a small sample.\"}",
+   "data": {
+    "executive_summary": "The goal was a joint image\u2013caption embedding for image\u2013text retrieval (the primary task) and classification of imaging modality into 6 classes. The agent used the predefined split (20,000 train / 1,999 validation / 5,000 test), frozen BiomedCLIP image and text encoders, and residual 512-d projection heads trained with InfoNCE plus a supervised cross-entropy (CE) term at weight 0.5.\n\n**Training added nothing.** Every trained configuration chose epoch 0, the identity starting point of the residual heads. So the \"learned\" model is the pretrained (zero-shot) BiomedCLIP space. This held for the primary model, the contrastive-only model, partial fine-tuning and the critic's lower-learning-rate revision.\n\n**Retrieval.** On the held-out test set, mean R@10 was 0.7902 (bootstrap 95% interval 0.7795\u20130.8001), against a chance level of 0.002. This is +0.1517 over CCA (95% CI 0.141\u20130.162) and exactly equal to zero-shot (difference 0.000, CI 0.000 to 0.000).\n\n**Classification.** A linear probe on the fused embedding reached macro-F1 0.938 (0.930\u20130.946), against a chance level of 0.167. That beats the image-only features by 0.017 (CI 0.005\u20130.033) but ties simple early fusion (difference 0.000, CI \u22120.003 to 0.004) and late fusion (difference \u22120.001, CI \u22120.004 to 0.002).\n\n**Bottom line:** pretrained BiomedCLIP is a strong solution here. Fusing the two modalities helps classification compared with one modality alone. The training in this run did not improve on either. The absolute scores may also be inflated, because BiomedCLIP's pretraining data may overlap this dataset.",
+    "data_and_objective": "**Size and pairing.** 27,000 samples; 26,999 have both an image and a caption, and the 1 incomplete sample was dropped from alignment. With about 19,999 training pairs, contrastive alignment is feasible, and a batch of 512 gives 511 negatives per positive.\n\n**Label.** `modality` has 6 classes and is present on 99.1% of samples (26,756). It is strongly imbalanced (imbalance ratio 63.857):\n- X-Ray Computed Tomography: 9,387\n- Plain x-ray: 7,449\n- Positron-Emission Tomography (PET): 147\n\nBecause of this, macro-F1 is the sensitive metric, and the agent cited it as the reason for adding the supervised CE term.\n\n**Images.** 70% are greyscale (0.704), so luminance was copied to three channels to fit the pretrained encoders. There were no near-duplicate images (0.0).\n\n**Captions.** Short: median 17 words, 95% have 49 words or fewer, and 2.6% exceed 60 words. Vocabulary is 17,825 distinct words, and about 1% of captions are near-duplicates (0.009963). This drove the choice of text truncation length.\n\n**Groups and split.**\n- There are 21,341 `article` groups, and the data come with a predefined 20,000 / 2,000 / 5,000 split.\n- That split is **not grouped by article** (\"Test groups: none (not grouped)\").\n- 19% of test samples share an article with a validation sample, so choices made on validation may flatter test results slightly.\n- How many articles train and test share is not reported.\n\n**Domain.** The captions are figure captions grouped by article. That is the same kind of material as BiomedCLIP's PMC-15M pretraining corpus, which raises a contamination concern.",
+    "decisions_explained": "- **Split:** the predefined split was used so results are comparable with other work and the test set stays unseen. Models were selected on validation only, and the test set was scored once, after the critic. The cost: there is only one fold, so uncertainty comes from bootstrap intervals rather than spread across folds. The 19% validation\u2013test article overlap was noted.\n- **Strategy:** CLIP-style contrastive alignment (InfoNCE). The objective needs a shared space, and there are about 19,999 training pairs.\n- **Encoders:** 4 image \u00d7 4 text candidates were screened on 2,000 training and 500 validation samples drawn from separate groups.\n  - BiomedCLIP image + text scored alignment R@10 0.966 (zero-shot; 0.917 with CCA).\n  - The next best pair, BiomedCLIP image + PubMedBERT, scored 0.599. DINOv2 + BiomedCLIP text scored 0.511.\n  - For images, BiomedCLIP's probe macro-F1 (0.934) led DINOv2 (0.914), CLIP-B/16 (0.915) and ResNet-50 (0.895 at best).\n  - The agent later warned that BiomedCLIP's advantage may be inflated by overlap with its pretraining data.\n- **Preprocessing:**\n  - Greyscale images were copied to RGB.\n  - The text cap was raised by the LLM planner from 80 to 128 tokens. Biomedical words split into more subword tokens, and features are computed once, so the longer cap costs almost nothing.\n- **Heads:** residual 512-d heads that start as the identity, so training begins from the zero-shot solution and epoch 0 can itself be selected. The rule-based log said \"embed 256\"; the LLM corrected this to 512 to keep the pretrained dimension.\n- **Training settings:**\n  - lr 0.001, batch 512, dropout 0.1.\n  - Temperature learned, starting from 0.07.\n  - Early stopping with patience 15, and a 180 s cap per fit.\n- **Losses:** InfoNCE (weight 1.0) plus CE on `modality` (weight 0.5), since the objective asks for classification. A `contrastive_only` comparison tests whether the CE term costs retrieval.\n- **Regime:** backbones frozen, which means few trainable parameters and low variance. Partial fine-tuning of the last 2 blocks was run as a comparison, with a 1,200 s budget and batch size raised from 64 to 128. The larger batch keeps the number of negatives from being confounded with fine-tuning.\n- **Evaluation:** the primary metric is mean R@10 for retrieval. Baselines: each modality alone, CCA, early fusion, late fusion, zero-shot and chance. The zero-shot baseline is kept but flagged as possibly optimistic.",
+    "results_interpretation": "**Retrieval (test, 5,000 pairs)**\n- **Primary model (= zero-shot):**\n  - Mean R@10 0.7902 (0.7795\u20130.8001), far above the chance level of 0.002.\n  - R@1 0.3827, R@5 0.6804, median rank 2.0.\n  - Both directions are similar: image\u2192text 0.789, text\u2192image 0.7914.\n  - On a standardised gallery of 1,000, R@10 is 0.941.\n- **CCA:** R@10 0.6385 (0.6255\u20130.6502), median rank 5.0, gallery-1,000 R@10 0.8564. The primary model beats CCA by 0.1517 (CI 0.141\u20130.162); the interval excludes zero.\n- **Validation to test:** validation R@10 was 0.871. Test is lower (0.7902), most likely partly because the test gallery is larger, which makes R@10 harder.\n- **Label consistency:** 0.939 of the top-10 neighbours share the query's modality, against a chance level of 0.262 (CCA: 0.821).\n\n**Classification (linear probe macro-F1; chance level 0.167)**\n- Fused embedding: 0.938 (0.930\u20130.946).\n- Image view: 0.921 (0.904\u20130.935).\n- Text view: 0.893 (0.875\u20130.909).\n- The text view sits slightly below the unimodal text baseline (0.896), with heavily overlapping intervals.\n- Detailed results for the image view: balanced accuracy 0.972, macro-F1 0.921.\n  - Per-class F1 is high for Ultrasonography (0.999), CT (0.974), MRI (0.941), Plain x-ray (0.938) and even PET (0.936), despite PET having only 147 samples.\n  - Angiogram is the clear weak class (0.739).\n\n**Clustering (ARI; point estimates only, no intervals)**\n- Test: fused 0.611, against text-only 0.555, image-only 0.503 and CCA fused 0.301.\n- Validation reverses part of this: primary 0.508 against the unimodal baseline's 0.512 (difference \u22120.004).\n- With no intervals and one fold, the test-set clustering advantage should be treated as unconfirmed.\n\n**Configurations compared**\n- `primary`, `contrastive_only`, `primary_revised` and `zero_shot` produced identical test metrics.\n- `partial_finetune` differed only negligibly: R@1 0.3828 and fused probe 0.934.\n- So neither the CE term nor fine-tuning changed anything measurable. None of these comparisons tells us whether CE or fine-tuning *would* help if training had moved the heads away from the identity starting point.",
+    "integration_benefit": "**Two modalities against one: yes, for classification.**\n- Fused macro-F1 0.938 against image-only 0.921: difference +0.017, CI 0.005\u20130.033, which excludes zero.\n- Text-only is lower still (0.896).\n- Test clustering ARI also favours fusion (0.611 against 0.555; difference 0.056), but there is no interval and validation showed no gain (\u22120.004).\n\n**Against linear alignment (CCA): yes, clearly.**\n- Retrieval R@10 +0.1517 (CI 0.141\u20130.162).\n- Probe macro-F1 +0.005 (CI 0.002\u20130.008): small but excludes zero.\n- ARI 0.611 against 0.301.\n- Caveat: CCA was fit on the BiomedCLIP features, so this gap reflects the pretrained contrastive alignment against a linear re-alignment of the same features.\n\n**Against simple fusion of unimodal features: tie.**\n- Early fusion (concatenation): difference +0.000 (CI \u22120.003 to 0.004).\n- Late fusion (averaging): difference \u22120.001 (CI \u22120.004 to 0.002).\n- Both intervals include zero.\n\n**Against zero-shot BiomedCLIP: identical.** Differences were exactly 0.000 on retrieval, probe and ARI.\n\n**Interpretation.** The benefit comes from combining the image and caption information that the pretrained BiomedCLIP encoders already extract. Plain concatenation or averaging captures it just as well. The joint heads trained in this run added nothing, because the selected checkpoint is the untrained identity. Tying simpler methods is the finding.",
+    "critic_and_revision": "**Triggers.** Three informational flags fired on validation:\n- no gain over zero-shot on R@10 (difference +0.000, CI 0.000 to 0.000);\n- no gain over the unimodal baseline on ARI (\u22120.004);\n- no gain over zero-shot on ARI (+0.000).\n\n**Assessment.** Retrieval is strong in absolute terms (validation R@10 0.871 against a chance level of 0.005, and +0.111 over CCA with CI 0.098\u20130.124). However, every configuration selected epoch 0, so \"training contributed nothing.\"\n\n**Diagnosis.** Training was moving the heads too far, too fast:\n- Validation R@10 fell right after the first epoch (0.871 \u2192 0.856 \u2192 0.830) while training loss fell steadily (2.34 \u2192 0.60).\n- The same happened in `contrastive_only`, so the CE term was not the cause.\n- Partial fine-tuning also degraded (0.853 after one epoch).\n- The critic attributed this to lr 1e-3 pushing the heads away from an already well-aligned space, on data likely close to BiomedCLIP's PMC pretraining distribution.\n\n**Revision.** It ran with lr 3e-05 and weight decay 0.01. It again chose epoch 0: validation R@10 0.8707 revised against 0.8707 original (difference +0.0000). It was **discarded**, and the original (zero-shot-equivalent) result stands. Test data were scored only after this decision.",
+    "limitations": "- **Possible pretraining contamination.** BiomedCLIP was pretrained on PMC-15M figure\u2013caption pairs, and this dataset is figure captions grouped by article. Overlap would inflate the zero-shot/primary scores (screening 0.966, test 0.7902) and the margin over non-BiomedCLIP encoders and CCA. The run cannot rule this out.\n- **No learned contribution.** All configurations selected epoch 0, including at lr 3e-05. The run therefore evaluates pretrained BiomedCLIP, not a trained joint model. Whether a smaller intervention, such as tuning only the temperature or using even lower learning rates, could help remains untested.\n- **The CE term and fine-tuning are uninformative.** Because every model sits at the identity, the comparisons with `contrastive_only` and `partial_finetune` cannot answer their intended questions. Partial fine-tuning also ran only 2 epochs.\n- **Single fold.** There is only one predefined split. Uncertainty comes from bootstrap intervals over test samples, not across folds. Clustering ARI has no interval at all.\n- **Split not grouped by article.** 19% of test samples share an article with a validation sample. Train\u2013test article overlap is not reported. Both could make held-out estimates optimistic.\n- **Clustering is inconsistent.** The fused ARI advantage on test (0.611 against 0.555) was not seen on validation (0.508 against 0.512).\n- **Gallery size.** R@10 depends on gallery size: chance is 0.002 on test and 0.005 on validation. Compare across studies using the gallery-1,000 figure (0.941) or with matched galleries.\n- **Weak class and small class.** Angiogram F1 is only 0.739. PET has 147 samples in total, so its per-class F1 (0.936) rests on few test cases.\n- **Screening sample.** Encoders were chosen on a 2,000/500 subsample. That was adequate here given the large margin, but it is still a small sample."
+   }
+  }
+ ]
+}

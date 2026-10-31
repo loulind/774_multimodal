@@ -163,6 +163,11 @@
           "default": 0.1,
           "title": "Dropout",
           "type": "number"
+        },
+        "residual": {
+          "default": false,
+          "title": "Residual",
+          "type": "boolean"
         }
       },
       "title": "HeadSpec",

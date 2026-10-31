@@ -128,6 +128,14 @@ def finetune(cfg: ConfigSpec, ds, encoders: dict[str, Encoder], train_idx: np.nd
     best, best_epoch, best_state, stale = -np.inf, 0, None, 0
     start, why, steps_done = time.perf_counter(), "epoch cap", 0
     val_cap = np.sort(rng.permutation(val_idx)[:2000])
+    # epoch 0: the pretrained towers with the starting heads (identity when residual) are a candidate
+    init = recall_at_k(ft.embed_indices(pair[0], val_cap), ft.embed_indices(pair[1], val_cap))
+    hist["initial_val_score"] = round(init, 5)
+    best = init
+    best_state = {"model": copy.deepcopy({k: v.detach().cpu() for k, v in model.state_dict().items()}),
+                  "backbone": [p.detach().cpu().clone() for p in backbone]}
+    if progress:
+        progress(f"    {cfg.name} before training: val recall@10 {init:.4f}")
     for epoch in range(1, t.max_epochs + 1):
         model.train()
         for m in pair:

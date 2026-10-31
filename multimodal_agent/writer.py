@@ -4,7 +4,8 @@ Either way, every number in the prose is checked against the run's computed reco
 number that cannot be matched, allowing for rounding, thousands separators, sign and
 proportions written as percentages, is listed in the report under "numbers not found in
 the outputs", so an invented or mis-copied value is visible rather than silent. Small
-integers (folds, k in recall@k) and figure or table references are not checked.
+integers (folds, k in recall@k), figure or table references and numbers that are part of a name
+(ResNet-50) are not checked.
 """
 
 from __future__ import annotations
@@ -70,6 +71,9 @@ def check_numbers(sections: dict[str, str], record: dict) -> dict:
         for m in _NUM.finditer(text):
             if _REF.search(text[max(0, m.start() - 12):m.start()]):
                 continue
+            before = text[max(0, m.start() - 2):m.start()]
+            if len(before) == 2 and before[1] == "-" and before[0].isalpha():
+                continue                                       # part of a name: ResNet-50, PET-CT-2
             x, decimals, pct = _parse(m)
             if (decimals == 0 and not pct and x <= TRIVIAL_INT) or x in CONSTANTS:
                 continue

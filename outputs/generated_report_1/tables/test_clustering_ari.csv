@@ -1,15 +1,15 @@
 metric,representation,view,name,kind,value,sd,lo,hi,interval,per_fold,is_primary
-clustering_ari,patch_context_2x,fused,patch_context_2x (fused),configuration,0.2884457887878269,0.1004212286874939,0.188024560100333,0.3888670174753208,±1 SD over 4 folds,"[0.17, 0.2832, 0.2849, 0.4157]",False
-clustering_ari,patch_context_2x,image,patch_context_2x (image),configuration,0.2830845700278056,0.1540261782607735,0.12905839176703213,0.4371107482885791,±1 SD over 4 folds,"[0.0545, 0.3655, 0.329, 0.3833]",False
-clustering_ari,primary,fused,primary (fused),configuration,0.24377746068619915,0.10291239042011965,0.1408650702660795,0.3466898511063188,±1 SD over 4 folds,"[0.1773, 0.1415, 0.2917, 0.3646]",False
-clustering_ari,hard_infonce,fused,hard_infonce (fused),configuration,0.23152044770306746,0.07511003790440579,0.15641040979866166,0.30663048560747325,±1 SD over 4 folds,"[0.201, 0.1401, 0.2827, 0.3023]",True
+clustering_ari,patch_context_2x,fused,patch_context_2x (fused),configuration,0.2907503679725814,0.09233047049586411,0.1984198974767173,0.38308083846844554,±1 SD over 4 folds,"[0.1866, 0.2857, 0.2793, 0.4114]",False
+clustering_ari,patch_context_2x,image,patch_context_2x (image),configuration,0.27470559372642633,0.14155435266858488,0.13315124105784146,0.4162599463950112,±1 SD over 4 folds,"[0.0685, 0.3626, 0.2959, 0.3718]",False
+clustering_ari,primary,fused,primary (fused),configuration,0.24441255519958877,0.09177128435433056,0.1526412708452582,0.33618383955391934,±1 SD over 4 folds,"[0.1689, 0.1673, 0.2891, 0.3523]",False
 clustering_ari,cca,fused,cca (fused),baseline,0.23071999916241753,0.11343278830400283,0.1172872108584147,0.34415278746642036,±1 SD over 4 folds,"[0.0611, 0.2752, 0.2913, 0.2953]",False
-clustering_ari,hard_infonce,image,hard_infonce (image),configuration,0.2153301079759142,0.11163983464428426,0.10369027333162995,0.32696994262019846,±1 SD over 4 folds,"[0.0574, 0.2159, 0.2991, 0.289]",True
+clustering_ari,hard_infonce,image,hard_infonce (image),configuration,0.2196620814000164,0.1182904253083601,0.10137165609165628,0.3379525067083765,±1 SD over 4 folds,"[0.0468, 0.24, 0.3001, 0.2918]",True
+clustering_ari,hard_infonce,fused,hard_infonce (fused),configuration,0.2104178692271848,0.09270627648502314,0.11771159274216167,0.3031241457122079,±1 SD over 4 folds,"[0.1116, 0.1514, 0.2828, 0.2959]",True
 clustering_ari,unimodal,image,unimodal (image),baseline,0.20904039802775523,0.10403185237489196,0.10500854565286327,0.3130722504026472,±1 SD over 4 folds,"[0.0656, 0.2865, 0.2851, 0.199]",False
-clustering_ari,primary,image,primary (image),configuration,0.2008112138854194,0.1234477213653463,0.07736349252007309,0.3242589352507657,±1 SD over 4 folds,"[0.027, 0.274, 0.3016, 0.2006]",False
+clustering_ari,primary,image,primary (image),configuration,0.18893187445851697,0.12325030865581252,0.06568156580270446,0.3121821831143295,±1 SD over 4 folds,"[0.0194, 0.2511, 0.3026, 0.1825]",False
 clustering_ari,cca,image,cca (image),baseline,0.17892179316507087,0.10601497353102962,0.07290681963404125,0.28493676669610046,±1 SD over 4 folds,"[0.0273, 0.2417, 0.261, 0.1856]",False
 clustering_ari,unimodal,expression,unimodal (expression),baseline,0.16519430672996793,0.07288635665874418,0.09230795007122375,0.23808066338871212,±1 SD over 4 folds,"[0.1371, 0.0891, 0.173, 0.2616]",False
-clustering_ari,hard_infonce,expression,hard_infonce (expression),configuration,0.1639688602823762,0.05658924836243866,0.10737961191993754,0.22055810864481484,±1 SD over 4 folds,"[0.1903, 0.0845, 0.1663, 0.2148]",True
-clustering_ari,primary,expression,primary (expression),configuration,0.15798681498575223,0.07453904346722905,0.08344777151852319,0.2325258584529813,±1 SD over 4 folds,"[0.1302, 0.0853, 0.1555, 0.261]",False
-clustering_ari,patch_context_2x,expression,patch_context_2x (expression),configuration,0.15374842825968546,0.06482535511716767,0.0889230731425178,0.21857378337685313,±1 SD over 4 folds,"[0.1304, 0.0847, 0.1611, 0.2388]",False
+clustering_ari,hard_infonce,expression,hard_infonce (expression),configuration,0.16443189778383677,0.058022352395040194,0.10640954538879657,0.22245425017887696,±1 SD over 4 folds,"[0.1893, 0.0857, 0.161, 0.2217]",True
+clustering_ari,primary,expression,primary (expression),configuration,0.16059855680517524,0.0731795212085295,0.08741903559664574,0.23377807801370473,±1 SD over 4 folds,"[0.1437, 0.0832, 0.156, 0.2595]",False
+clustering_ari,patch_context_2x,expression,patch_context_2x (expression),configuration,0.15991230213936755,0.06431130857740866,0.09560099356195889,0.2242236107167762,±1 SD over 4 folds,"[0.1323, 0.0846, 0.193, 0.2298]",False
 clustering_ari,cca,expression,cca (expression),baseline,0.1292366398930615,0.07651543683092127,0.05272120306214023,0.20575207672398277,±1 SD over 4 folds,"[0.0478, 0.0885, 0.2203, 0.1604]",False

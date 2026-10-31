@@ -1,0 +1,7 @@
+metric,representation,view,name,kind,value,sd,lo,hi,interval,per_fold,is_primary
+retrieval_mean_recall_at_10,primary,,primary,configuration,0.7902,,0.7795000000000001,0.8001,bootstrap 95% interval,[0.7902],True
+retrieval_mean_recall_at_10,partial_finetune,,partial_finetune,configuration,0.7902,,0.7795000000000001,0.8001,bootstrap 95% interval,[0.7902],False
+retrieval_mean_recall_at_10,contrastive_only,,contrastive_only,configuration,0.7902,,0.7795000000000001,0.8001,bootstrap 95% interval,[0.7902],False
+retrieval_mean_recall_at_10,primary_revised,,primary_revised,configuration,0.7902,,0.7795000000000001,0.8001,bootstrap 95% interval,[0.7902],False
+retrieval_mean_recall_at_10,zero_shot,,zero_shot,baseline,0.7902,,0.7795000000000001,0.8001,bootstrap 95% interval,[0.7902],False
+retrieval_mean_recall_at_10,cca,,cca,baseline,0.6385000000000001,,0.6255,0.6502,bootstrap 95% interval,[0.6385],False

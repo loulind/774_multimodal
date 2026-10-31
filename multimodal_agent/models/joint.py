@@ -49,7 +49,7 @@ class JointModel(nn.Module):
         super().__init__()
         h, t = cfg.head, cfg.training
         self.pair = list(in_dims)
-        self.heads = nn.ModuleDict({m: MLP(d, h.embed_dim, h.hidden_dim, h.n_layers, h.dropout)
+        self.heads = nn.ModuleDict({m: MLP(d, h.embed_dim, h.hidden_dim, h.n_layers, h.dropout, h.residual)
                                     for m, d in in_dims.items()})
         self.logit_scale = nn.Parameter(torch.tensor(math.log(1 / t.temperature_init)),
                                         requires_grad=t.learnable_temperature)

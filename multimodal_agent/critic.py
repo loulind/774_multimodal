@@ -132,6 +132,8 @@ def _longer(cfg: ConfigSpec, records: list[dict], budget: Budget, n_folds: int,
 
 def _against(cfg: ConfigSpec, plan: Plan, alt: str, underfit: bool, records, budget, n_folds,
              remaining) -> list[Change]:
+    if alt == "zero_shot" and not cfg.head.residual:
+        return [Change(path="head.residual", value=True)]   # start from the pretrained space
     if alt == "ridge" and plan.task.prediction is not None:
         w = next((t.weight for t in cfg.losses if t.name == "cross_modal_regression"), None)
         return [Change(path="loss.cross_modal_regression.weight",
@@ -317,6 +319,7 @@ def editable_fields(plan: Plan, profile: DataProfile, budget: Budget) -> dict:
     out["training.max_epochs"] = [1, budget.max_epochs]
     out["training.train_seconds"] = [V.MIN_FIT_SECONDS, round(_fit_cap(prim, budget), 1)]
     out["training.learnable_temperature"] = [True, False]
+    out["head.residual"] = [True, False]
     out.update({f"loss.{n}.weight": list(V.LOSS_WEIGHT) for n in sorted(LOSS_NAMES)})
     for m in prim.modalities:
         kind = profile.modality(m.modality).kind

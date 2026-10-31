@@ -221,3 +221,21 @@ def test_finetune_runs_and_embeds(image_text_ds):
     z = ft.embed_indices("image", np.arange(150, 160))
     assert z.shape == (10, 8) and np.allclose(np.linalg.norm(z, axis=1), 1, atol=1e-5)
     assert not any(p.requires_grad for p in encs["image"].stem.parameters())
+
+
+def test_residual_head_starts_from_the_pretrained_space():
+    from multimodal_agent.models.heads import MLP
+
+    x = torch.randn(5, 16)
+    assert torch.allclose(MLP(16, 16, 32, 2, 0.0, residual=True)(x), x)          # identity at the start
+    assert not MLP(16, 8, residual=True).residual                               # sizes differ: plain head
+    # pre-aligned inputs: the untrained start already retrieves perfectly, so it is kept (epoch 0)
+    X = np.random.default_rng(0).normal(size=(400, 16)).astype(np.float32)
+    c = cfg([("infonce", 1.0)], max_epochs=3)
+    c.head = HeadSpec(embed_dim=16, hidden_dim=32, n_layers=2, dropout=0.0, residual=True)
+    res = fit(c, FitData({"a": X[:300], "b": X[:300]}), FitData({"a": X[300:], "b": X[300:]}),
+              selection="retrieval", seed=0)
+    assert res.best_epoch == 0 and res.best_score == pytest.approx(1.0)
+    assert res.history["initial_val_score"] == pytest.approx(1.0) and res.summary()["train_loss_at_best"] is None
+    Z = X[300:] / np.linalg.norm(X[300:], axis=1, keepdims=True)
+    assert np.allclose(res.model.embed_np("a", X[300:]), Z, atol=1e-5)

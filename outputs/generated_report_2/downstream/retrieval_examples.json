@@ -1,0 +1,390 @@
+{
+ "a_to_b": [
+  {
+   "query": "ROCOv2_2023_test_007022",
+   "query_position": 3569,
+   "query_label": "angiogram",
+   "partner_rank": 2,
+   "retrieved": [
+    {
+     "id": "ROCOv2_2023_test_008054",
+     "position": 4060,
+     "similarity": 0.4884,
+     "is_partner": false,
+     "label": "angiogram",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_007022",
+     "position": 3569,
+     "similarity": 0.483,
+     "is_partner": true,
+     "label": "angiogram",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_001619",
+     "position": 848,
+     "similarity": 0.4682,
+     "is_partner": false,
+     "label": "angiogram",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_000258",
+     "position": 134,
+     "similarity": 0.4664,
+     "is_partner": false,
+     "label": "angiogram",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_006677",
+     "position": 3396,
+     "similarity": 0.459,
+     "is_partner": false,
+     "label": "angiogram",
+     "same_label": true
+    }
+   ]
+  },
+  {
+   "query": "ROCOv2_2023_test_006587",
+   "query_position": 3352,
+   "query_label": "Positron-Emission Tomography",
+   "partner_rank": 1,
+   "retrieved": [
+    {
+     "id": "ROCOv2_2023_test_006587",
+     "position": 3352,
+     "similarity": 0.4821,
+     "is_partner": true,
+     "label": "Positron-Emission Tomography",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_008727",
+     "position": 4384,
+     "similarity": 0.4774,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "ROCOv2_2023_test_006718",
+     "position": 3413,
+     "similarity": 0.4652,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    },
+    {
+     "id": "ROCOv2_2023_test_004742",
+     "position": 2418,
+     "similarity": 0.4614,
+     "is_partner": false,
+     "label": "Positron-Emission Tomography",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_001056",
+     "position": 554,
+     "similarity": 0.4524,
+     "is_partner": false,
+     "label": null,
+     "same_label": false
+    }
+   ]
+  },
+  {
+   "query": "ROCOv2_2023_test_001732",
+   "query_position": 908,
+   "query_label": "Plain x-ray",
+   "partner_rank": 1,
+   "retrieved": [
+    {
+     "id": "ROCOv2_2023_test_001732",
+     "position": 908,
+     "similarity": 0.5032,
+     "is_partner": true,
+     "label": "Plain x-ray",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_004957",
+     "position": 2538,
+     "similarity": 0.4573,
+     "is_partner": false,
+     "label": "Plain x-ray",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_008157",
+     "position": 4109,
+     "similarity": 0.4528,
+     "is_partner": false,
+     "label": "Plain x-ray",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_006482",
+     "position": 3300,
+     "similarity": 0.4522,
+     "is_partner": false,
+     "label": "Plain x-ray",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_000715",
+     "position": 372,
+     "similarity": 0.4418,
+     "is_partner": false,
+     "label": "Plain x-ray",
+     "same_label": true
+    }
+   ]
+  },
+  {
+   "query": "ROCOv2_2023_test_005345",
+   "query_position": 2727,
+   "query_label": "Ultrasonography",
+   "partner_rank": 2,
+   "retrieved": [
+    {
+     "id": "ROCOv2_2023_test_003634",
+     "position": 1847,
+     "similarity": 0.516,
+     "is_partner": false,
+     "label": "Ultrasonography",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_005345",
+     "position": 2727,
+     "similarity": 0.4706,
+     "is_partner": true,
+     "label": "Ultrasonography",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_009433",
+     "position": 4725,
+     "similarity": 0.4503,
+     "is_partner": false,
+     "label": "Ultrasonography",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_001713",
+     "position": 900,
+     "similarity": 0.4367,
+     "is_partner": false,
+     "label": "Ultrasonography",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_003451",
+     "position": 1769,
+     "similarity": 0.43,
+     "is_partner": false,
+     "label": "Ultrasonography",
+     "same_label": true
+    }
+   ]
+  }
+ ],
+ "b_to_a": [
+  {
+   "query": "ROCOv2_2023_test_009075",
+   "query_position": 4561,
+   "query_label": "angiogram",
+   "partner_rank": 1,
+   "retrieved": [
+    {
+     "id": "ROCOv2_2023_test_009075",
+     "position": 4561,
+     "similarity": 0.5746,
+     "is_partner": true,
+     "label": "angiogram",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_008247",
+     "position": 4151,
+     "similarity": 0.4403,
+     "is_partner": false,
+     "label": "angiogram",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_006987",
+     "position": 3553,
+     "similarity": 0.4347,
+     "is_partner": false,
+     "label": "angiogram",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_007997",
+     "position": 4033,
+     "similarity": 0.4051,
+     "is_partner": false,
+     "label": "angiogram",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_003483",
+     "position": 1779,
+     "similarity": 0.3954,
+     "is_partner": false,
+     "label": "angiogram",
+     "same_label": true
+    }
+   ]
+  },
+  {
+   "query": "ROCOv2_2023_test_004062",
+   "query_position": 2073,
+   "query_label": "X-Ray Computed Tomography",
+   "partner_rank": 1,
+   "retrieved": [
+    {
+     "id": "ROCOv2_2023_test_004062",
+     "position": 2073,
+     "similarity": 0.4549,
+     "is_partner": true,
+     "label": "X-Ray Computed Tomography",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_003917",
+     "position": 1999,
+     "similarity": 0.45,
+     "is_partner": false,
+     "label": "X-Ray Computed Tomography",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_003902",
+     "position": 1991,
+     "similarity": 0.4407,
+     "is_partner": false,
+     "label": "X-Ray Computed Tomography",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_002306",
+     "position": 1196,
+     "similarity": 0.4397,
+     "is_partner": false,
+     "label": "X-Ray Computed Tomography",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_004835",
+     "position": 2472,
+     "similarity": 0.4355,
+     "is_partner": false,
+     "label": "X-Ray Computed Tomography",
+     "same_label": true
+    }
+   ]
+  },
+  {
+   "query": "ROCOv2_2023_test_002846",
+   "query_position": 1479,
+   "query_label": "Magnetic Resonance Imaging",
+   "partner_rank": 7,
+   "retrieved": [
+    {
+     "id": "ROCOv2_2023_test_000308",
+     "position": 159,
+     "similarity": 0.464,
+     "is_partner": false,
+     "label": "Magnetic Resonance Imaging",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_008943",
+     "position": 4497,
+     "similarity": 0.4577,
+     "is_partner": false,
+     "label": "Magnetic Resonance Imaging",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_007630",
+     "position": 3858,
+     "similarity": 0.4572,
+     "is_partner": false,
+     "label": "Magnetic Resonance Imaging",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_000139",
+     "position": 64,
+     "similarity": 0.454,
+     "is_partner": false,
+     "label": "Magnetic Resonance Imaging",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_007344",
+     "position": 3730,
+     "similarity": 0.4468,
+     "is_partner": false,
+     "label": "Magnetic Resonance Imaging",
+     "same_label": true
+    }
+   ]
+  },
+  {
+   "query": "ROCOv2_2023_test_008772",
+   "query_position": 4407,
+   "query_label": "Plain x-ray",
+   "partner_rank": 2,
+   "retrieved": [
+    {
+     "id": "ROCOv2_2023_test_006456",
+     "position": 3284,
+     "similarity": 0.4765,
+     "is_partner": false,
+     "label": "X-Ray Computed Tomography",
+     "same_label": false
+    },
+    {
+     "id": "ROCOv2_2023_test_008772",
+     "position": 4407,
+     "similarity": 0.4688,
+     "is_partner": true,
+     "label": "Plain x-ray",
+     "same_label": true
+    },
+    {
+     "id": "ROCOv2_2023_test_003557",
+     "position": 1813,
+     "similarity": 0.4605,
+     "is_partner": false,
+     "label": "X-Ray Computed Tomography",
+     "same_label": false
+    },
+    {
+     "id": "ROCOv2_2023_test_001593",
+     "position": 828,
+     "similarity": 0.46,
+     "is_partner": false,
+     "label": "X-Ray Computed Tomography",
+     "same_label": false
+    },
+    {
+     "id": "ROCOv2_2023_test_000550",
+     "position": 287,
+     "similarity": 0.4452,
+     "is_partner": false,
+     "label": "X-Ray Computed Tomography",
+     "same_label": false
+    }
+   ]
+  }
+ ]
+}

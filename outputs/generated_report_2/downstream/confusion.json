@@ -1,0 +1,71 @@
+{
+ "classes": [
+  "Magnetic Resonance Imaging",
+  "Plain x-ray",
+  "Positron-Emission Tomography",
+  "Ultrasonography",
+  "X-Ray Computed Tomography",
+  "angiogram"
+ ],
+ "matrix": [
+  [
+   710,
+   1,
+   1,
+   0,
+   5,
+   0
+  ],
+  [
+   5,
+   1218,
+   1,
+   0,
+   0,
+   148
+  ],
+  [
+   0,
+   0,
+   22,
+   0,
+   0,
+   0
+  ],
+  [
+   0,
+   0,
+   0,
+   804,
+   0,
+   0
+  ],
+  [
+   77,
+   6,
+   1,
+   1,
+   1735,
+   1
+  ],
+  [
+   0,
+   0,
+   0,
+   0,
+   0,
+   211
+  ]
+ ],
+ "per_class_f1": {
+  "Magnetic Resonance Imaging": 0.9410205434062293,
+  "Plain x-ray": 0.9380053908355795,
+  "Positron-Emission Tomography": 0.9361702127659575,
+  "Ultrasonography": 0.9993784959602238,
+  "X-Ray Computed Tomography": 0.9744453805110924,
+  "angiogram": 0.7390542907180385
+ },
+ "macro_f1": 0.9213457190328534,
+ "balanced_accuracy": 0.9717942337670239,
+ "view": "image"
+}

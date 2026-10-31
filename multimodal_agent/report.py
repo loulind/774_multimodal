@@ -419,6 +419,7 @@ def _config_summary(c) -> dict:
             "regimes": {m.modality: m.regime + (f" (last {m.trainable_blocks} blocks)" if m.trainable_blocks else "")
                         for m in c.modalities},
             "losses": {t.name: t.weight for t in c.losses}, "embed_dim": c.head.embed_dim,
+            "residual_head": c.head.residual,
             "hidden_dim": c.head.hidden_dim, "dropout": c.head.dropout, "lr": c.training.lr,
             "batch_size": c.training.batch_size, "max_epochs": c.training.max_epochs,
             "train_seconds": c.training.train_seconds, "rationale": c.rationale[:300]}
@@ -688,7 +689,10 @@ def methods_summary(agent) -> str:
     lines += ["", "## Representation learning", "",
               f"- Strategy: {prim.strategy} ({prim.fusion} fusion); projection heads of {prim.head.n_layers} layers "
               f"(hidden {prim.head.hidden_dim}, dropout {prim.head.dropout}) into a {prim.head.embed_dim}-dimensional "
-              "L2-normalised joint space.",
+              "L2-normalised joint space"
+              + ("; residual heads (pretrained embedding + a learned correction that starts at zero), so training "
+                 "starts from the pretrained space and the untrained start is a candidate in model selection."
+                 if prim.head.residual else "."),
               f"- Objective: {' + '.join(f'{x.weight} x {x.name}' for x in prim.losses)}.",
               f"- Optimiser AdamW, lr {t.lr}, weight decay {t.weight_decay}, batch {t.batch_size}, up to {t.max_epochs} "
               f"epochs, early stopping after {t.patience} epochs without validation improvement, time cap "
