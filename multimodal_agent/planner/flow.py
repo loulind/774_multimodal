@@ -59,7 +59,7 @@ def rule_based(ds, profile, task, budget, device: str, cache: FeatureCache | Non
     if not checked.ok:
         raise ValueError(f"rule-based plan failed validation: {checked.errors}")
     for n in notes:
-        log.add("split", "split note", n, "data", source="system")
+        log.add("split", "sample selection", n, "Recorded while drawing the folds.", source="system")
     return PlanOutcome(checked.plan, folds, screening, table, notes)
 
 

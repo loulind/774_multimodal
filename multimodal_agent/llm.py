@@ -26,8 +26,10 @@ left of ``max_budget_usd``, and once it is used up later calls fall back to rule
 
 Reproducibility. Sampling cannot be fixed, so every response is written to
 ``<run>/llm_cache/<role>_<hash>.json`` with the exact prompts, the model requested and
-used, token usage, cost and timing. ``--replay <dir>`` serves responses from such a cache
-and never calls a model, so a run can be repeated decision for decision.
+used, token usage, cost and timing; the run's outputs also keep the same records as
+``llm_transcript.json``. ``--replay`` takes either (a cache directory, a transcript file,
+or a run directory holding one) and never calls a model, so a run can be repeated
+decision for decision.
 """
 
 from __future__ import annotations
@@ -202,9 +204,11 @@ class LLMClient:
         self.max_budget_usd = max_budget_usd
         self.effort = effort or {}
         self.calls: list[dict] = []
+        self.records: list[dict] = []               # full records (prompts + replies) of this run's calls
         self.notes: list[str] = []
         self.disabled: str | None = None            # set after a failure retrying cannot fix
         self._sequence: dict[str, int] = {}
+        self._replay = load_records(self.replay_from) if self.replay_from is not None else None
 
     @property
     def available(self) -> bool:
@@ -229,17 +233,20 @@ class LLMClient:
         seq = self._sequence.get(role, 0)
         self._sequence[role] = seq + 1
         key = self._key(role, system, user, schema)
-        for directory in [d for d in (self.replay_from, self.cache_dir) if d is not None]:
-            if (directory / key).exists():
-                return self._from_record(role, key, directory / key)
-        if self.replay_from is not None:
+        if self._replay is not None:
+            hit = next((r for r in self._replay if r.get("key") == key), None)
+            if hit is not None:
+                return self._from_record(role, key, hit)
             # Prompts embed run results, which can differ in the last digits between machines
-            # (GPU feature extraction). The sequence of calls is what a replay reproduces, so
-            # fall back to the response this role gave at the same position in the original run.
-            for path in sorted(self.replay_from.glob(f"{role}_*.json")):
-                if json.loads(path.read_text()).get("sequence") == seq:
-                    return self._from_record(role, key, path, matched="role and position")
+            # (GPU feature extraction) or in measured times. The sequence of calls is what a
+            # replay reproduces, so fall back to the response this role gave at the same
+            # position in the original run.
+            hit = next((r for r in self._replay if r.get("role") == role and r.get("sequence") == seq), None)
+            if hit is not None:
+                return self._from_record(role, key, hit, matched="role and position")
             raise LLMUnavailable(f"replay: no cached response for {role} call {seq} ({key})")
+        if (self.cache_dir / key).exists():
+            return self._from_record(role, key, json.loads((self.cache_dir / key).read_text()))
         if self.disabled:
             raise LLMUnavailable(f"LLM disabled for this run: {self.disabled}")
         budget = None
@@ -260,25 +267,26 @@ class LLMClient:
             self.notes.append(f"{role}: requested {resp.model_requested}, answered by {resp.model_used}")
         if resp.note:
             self.notes.append(f"{role}: {resp.note}")
+        rec = {"key": key, "role": role, "sequence": seq, **resp.to_record(), "effort": effort,
+               "max_output_tokens": getattr(self.backend, "max_output_tokens", None),
+               "budget_usd_given": budget, "system": system, "user": user, "schema": schema,
+               "text": resp.text, "data": resp.data}
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        (self.cache_dir / key).write_text(json.dumps({
-            "role": role, "sequence": seq, **resp.to_record(), "effort": effort,
-            "max_output_tokens": getattr(self.backend, "max_output_tokens", None),
-            "budget_usd_given": budget, "system": system, "user": user, "schema": schema,
-            "text": resp.text, "data": resp.data}, indent=1, default=str))
+        (self.cache_dir / key).write_text(json.dumps(rec, indent=1, default=str))
+        self.records.append(rec)
         self._record(role, key, resp)
         return resp
 
-    def _from_record(self, role: str, key: str, path: Path, matched: str = "exact prompt") -> LLMResponse:
-        rec = json.loads(path.read_text())
+    def _from_record(self, role: str, key: str, rec: dict, matched: str = "exact prompt") -> LLMResponse:
         resp = LLMResponse(text=rec["text"], backend=rec["backend"], model_requested=rec["model_requested"],
                            model_used=rec["model_used"], seconds=0.0, cost_usd=rec.get("cost_usd"),
                            data=rec.get("data"), usage=rec.get("usage") or {},
                            structured=rec.get("structured", False), cached=True,
                            note=f"from cache ({matched})")
-        if path.parent != self.cache_dir:            # keep this run's cache complete
-            self.cache_dir.mkdir(parents=True, exist_ok=True)
-            (self.cache_dir / key).write_text(path.read_text())
+        rec = {**rec, "key": key, "role": role, "sequence": self._sequence[role] - 1}
+        self.cache_dir.mkdir(parents=True, exist_ok=True)   # keep this run's cache complete
+        (self.cache_dir / key).write_text(json.dumps(rec, indent=1, default=str))
+        self.records.append(rec)
         self._record(role, key, resp)
         return resp
 
@@ -293,6 +301,26 @@ class LLMClient:
                 "n_calls": len(self.calls), "n_from_cache": sum(c["cached"] for c in self.calls),
                 "total_cost_usd": round(self.spent_usd, 4), "max_budget_usd": self.max_budget_usd,
                 "disabled": self.disabled, "notes": self.notes, "calls": self.calls}
+
+
+def load_records(path: str | Path) -> list[dict]:
+    """LLM call records from a cache directory, a transcript file, or a run directory holding one."""
+    path = Path(path)
+    if path.is_dir() and (path / "llm_cache").is_dir():
+        path = path / "llm_cache"
+    elif path.is_dir() and (path / "llm_transcript.json").is_file() and not any(path.glob("*_*.json")):
+        path = path / "llm_transcript.json"
+    if path.is_file():
+        data = json.loads(path.read_text())
+        return data.get("calls", []) if isinstance(data, dict) else data
+    if not path.is_dir():
+        raise LLMUnavailable(f"replay source {path} not found")
+    out = []
+    for f in sorted(path.glob("*.json")):
+        rec = json.loads(f.read_text())
+        rec.setdefault("key", f.name)
+        out.append(rec)
+    return out
 
 
 def make_client(cfg: LLMConfig, cache_dir: str | Path, replay_from: str | Path | None = None,

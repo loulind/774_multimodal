@@ -304,6 +304,12 @@ class FeatureCache:
         (self.root / f"{key}.json").write_text(json.dumps(meta, indent=1, default=str))
 
 
+def as_cached(arr: np.ndarray) -> np.ndarray:
+    """Features exactly as a later cache hit returns them (stored as float16), so a first run and
+    its reruns compute on identical inputs."""
+    return arr.astype(np.float16).astype(np.float32)
+
+
 def ids_digest(ids) -> str:
     return hashlib.sha1("\n".join(map(str, ids)).encode()).hexdigest()[:16]
 
@@ -354,6 +360,7 @@ def image_features(enc: Encoder, source, indices: np.ndarray, transform, groups:
     worker.join()
     if key is not None:
         cache.save(key, out, {"encoder": enc.info.name, "n": len(indices), **key_parts})
+        out = as_cached(out)
     return out
 
 
@@ -372,4 +379,5 @@ def text_features(enc: Encoder, texts: list[str], max_tokens: int, batch_size: i
     arr = np.concatenate(out) if out else np.zeros((0, enc.dim), np.float32)
     if key is not None:
         cache.save(key, arr, {"encoder": enc.info.name, "n": len(texts), "max_tokens": max_tokens, **key_parts})
+        arr = as_cached(arr)
     return arr

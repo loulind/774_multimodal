@@ -154,6 +154,7 @@ def find_triggers(plan: Plan, val_folds: list[dict], flags: list[dict], training
     under = _majority([_underfit(r) for r in records])
     over = _majority([_overfit(r) for r in records])
     out: list[Trigger] = []
+    closed_form = prim.strategy == "linear_alignment"      # CCA: only preprocessing changes can matter
     for fl in flags:
         code, msg = fl["code"], fl["message"]
         if code == "comparison_better":
@@ -164,14 +165,15 @@ def find_triggers(plan: Plan, val_folds: list[dict], flags: list[dict], training
         elif code.startswith("worse_than_"):
             on_primary = fl.get("metric") == pm
             changes = _against(prim, plan, code[len("worse_than_"):], under, records, budget, n_folds,
-                               remaining_seconds) if on_primary else []
+                               remaining_seconds) if on_primary and not closed_form else []
             out.append(Trigger(code=code, severity="warning" if on_primary else "info", config=prim.name,
                                message=msg + ("" if on_primary else " (secondary metric: reported, not revised)"),
                                suggested_action="modify_primary" if changes else "none",
                                suggested_changes=changes))
         elif code == "collapse":
-            out.append(Trigger(code=code, message=msg, config=prim.name, suggested_action="modify_primary",
-                               suggested_changes=_warmer(prim)))
+            out.append(Trigger(code=code, message=msg, config=prim.name,
+                               suggested_action="none" if closed_form else "modify_primary",
+                               suggested_changes=[] if closed_form else _warmer(prim)))
         elif code == "batch_confounding":
             img = next((m for m in prim.modalities if m.colour_normalisation == "none"
                         and m.encoder in REGISTRY and "image" in REGISTRY[m.encoder].kinds), None)
@@ -362,6 +364,9 @@ def _validated(reply: dict, plan: Plan, profile: DataProfile, budget: Budget, qu
         return c, None, [], ""
     if not c.changes:
         return None, None, [], "modify_primary without any changes"
+    if plan.primary.strategy == "linear_alignment" and any(not x.path.startswith("modalities.") for x in c.changes):
+        return None, None, [], ("the primary is a closed-form linear alignment (CCA); only modality preprocessing "
+                                "changes can alter it")
     cfg, repairs, err = revised_config(plan, c, profile, budget, quick, n_folds, remaining)
     if cfg is None:
         return None, None, repairs, err or "revision invalid"
