@@ -72,6 +72,20 @@ def test_cache_replay_and_role_position_matching(tmp_path):
     assert len(list((tmp_path / "run2").glob("*.json"))) == 2       # the new run's cache is complete
 
 
+def test_replay_from_a_run_directory_that_has_only_its_transcript(tmp_path):
+    # A clone has a run's llm_transcript.json and other outputs, but not its llm_cache/.
+    client, _ = client_for(tmp_path, [{"a": 1}])
+    client.complete("planner", "sys", "user 1")
+    run_dir = tmp_path / "outputs" / "run"
+    run_dir.mkdir(parents=True)
+    (run_dir / "llm_transcript.json").write_text(json.dumps({"model_requested": "fake-model",
+                                                             "calls": client.records}))
+    (run_dir / "decision_log.json").write_text("[]")
+    (run_dir / "run_manifest.json").write_text("{}")
+    replay = LLMClient(OfflineBackend("fake-model"), tmp_path / "run2", replay_from=run_dir)
+    assert replay.complete("planner", "sys", "user 1").json() == {"a": 1}
+
+
 def test_spend_cap_passes_remaining_budget_then_stops(tmp_path):
     client, backend = client_for(tmp_path, [{"x": 1}, {"x": 2}, {"x": 3}], cost=0.1, max_budget_usd=0.15)
     client.complete("planner", "s", "u1")

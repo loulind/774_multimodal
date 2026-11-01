@@ -115,13 +115,20 @@ def her2_files() -> dict[str, int]:
     return files
 
 
-def download_her2() -> Path:
+def _slide_of(path: str) -> str:
+    """Slide id of a cohort file: '.../<prefix>A1_coord.csv' -> 'A1'."""
+    return path.rsplit("/", 1)[-1][len(ST_PREFIX):].split("_")[0].split(".")[0]
+
+
+def download_her2(slides: tuple[str, ...] | None = None) -> Path:
+    """Download the cohort's files at the pinned commit (only the given slides' files, if any)."""
     from huggingface_hub import hf_hub_download
 
     raw = RAW / "stimage_her2"
-    files = her2_files()
+    files = {p: s for p, s in her2_files().items() if slides is None or _slide_of(p) in slides}
     missing = {p: s for p, s in files.items() if not (raw / p).exists()}
-    check_disk(sum(missing.values()), raw, f"STimage HER2 cohort ({len(files)} files)")
+    check_disk(sum(missing.values()), raw,
+               f"STimage HER2 {'slides ' + ', '.join(slides) if slides else 'cohort'} ({len(files)} files)")
     for i, path in enumerate(sorted(missing), 1):
         hf_hub_download(ST_REPO, path, repo_type="dataset", revision=ST_REVISION, local_dir=raw)
         if i % 20 == 0 or i == len(missing):
@@ -210,7 +217,8 @@ def build_her2(raw: Path, slides: list[str], out_dir: Path) -> dict:
 
 
 def prepare_her2(only: str | None) -> None:
-    raw = download_her2()
+    # The quick subset needs only its own slides' files, not the whole cohort.
+    raw = download_her2(ST_QUICK_SLIDES if only == "quick" else None)
     slides = _slide_ids(raw)
     targets = {"full": (DATA / "stimage_her2", slides),
                "quick": (DATA / "stimage_her2_quick", [s for s in slides if s in ST_QUICK_SLIDES])}

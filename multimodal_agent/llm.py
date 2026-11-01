@@ -308,7 +308,9 @@ def load_records(path: str | Path) -> list[dict]:
     path = Path(path)
     if path.is_dir() and (path / "llm_cache").is_dir():
         path = path / "llm_cache"
-    elif path.is_dir() and (path / "llm_transcript.json").is_file() and not any(path.glob("*_*.json")):
+    elif path.is_dir() and (path / "llm_transcript.json").is_file():
+        # A run directory without its cache (llm_cache/ is not committed, so a clone has
+        # only the transcript); cache directories never hold a transcript.
         path = path / "llm_transcript.json"
     if path.is_file():
         data = json.loads(path.read_text())

@@ -33,7 +33,6 @@ from . import writer
 from .config import REPO_ROOT
 from .encoders.registry import REGISTRY
 from .evaluate import suite as S
-from .evaluate.metrics import l2n
 
 EXPORT_MAX_BYTES = 5_000_000
 COMPARISON_METRICS = ["retrieval_mean_recall_at_10", "prediction_mean_pearson_top50", "probe_macro_f1",
@@ -876,8 +875,9 @@ def report_markdown(agent, record: dict, prose: dict, figs: dict, tables: dict, 
             f"- Command: `{manifest['command']}`",
             f"- Seed {agent.cfg.seed}; device {agent.hw.device} ({agent.hw.device_name}); projection heads on "
             f"{agent.heads_device}.",
-            f"- LLM: " + (f"{llm.get('model_requested')} via the Claude CLI, {llm.get('n_calls')} call(s), "
-                          f"${llm.get('total_cost_usd') or 0:.2f}; prompts and replies in `llm_transcript.json`; "
+            f"- LLM: " + (f"{llm.get('model_requested')} via the Claude CLI, {llm.get('n_calls')} call(s)"
+                          + (f" ({llm['n_from_cache']} answered from cache)" if llm.get("n_from_cache") else "")
+                          + f", ${llm.get('total_cost_usd') or 0:.2f}; prompts and replies in `llm_transcript.json`; "
                           f"`--replay {agent.out}` repeats them without calling a model."
                           if llm.get("n_calls") else "not used (rule-based planner, critic and writer)."),
             f"- Embeddings: `embeddings/{exported.get('file', '')}` ({exported.get('n_rows', 0):,} held-out rows"

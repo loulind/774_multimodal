@@ -87,6 +87,3 @@ class JointModel(nn.Module):
 
     def predict_np(self, source: str, X: np.ndarray) -> np.ndarray:
         return self._batched(lambda x: self.regressor(self.embed(source, x)), X)
-
-    def classify_np(self, name: str, X: np.ndarray) -> np.ndarray:
-        return self._batched(lambda x: torch.softmax(self.classifier(normalize(self.embed(name, x))), 1), X)
