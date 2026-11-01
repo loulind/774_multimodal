@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import torch
 
-from ..evaluate.metrics import columnwise_pearson, recall_at_k
+from ..evaluate.metrics import columnwise_pearson, l2n, recall_at_k
 from ..schema import ConfigSpec
 from . import losses as L
 from .heads import n_parameters
@@ -106,8 +106,10 @@ def _total(cfg: ConfigSpec, terms: dict[str, torch.Tensor]) -> torch.Tensor:
 
 
 @torch.no_grad()
-def score(model: JointModel, data: FitData, selection: str, pred_source: str | None) -> float:
-    """Validation score, higher is better (on at most VAL_CAP samples)."""
+def score(model: JointModel, data: FitData, selection: str, pred_source: str | None,
+          train: FitData | None = None) -> float:
+    """Validation score, higher is better (on at most VAL_CAP samples). ``train``: training samples,
+    whose class centroids the classification score uses."""
     keep = np.random.default_rng(0).permutation(data.n)[:VAL_CAP]
     d = data.subset(np.sort(keep))
     pair = model.pair
@@ -115,13 +117,25 @@ def score(model: JointModel, data: FitData, selection: str, pred_source: str | N
         return recall_at_k(model.embed_np(pair[0], d.inputs[pair[0]]), model.embed_np(pair[1], d.inputs[pair[1]]))
     if selection == "prediction" and model.regressor is not None and d.target is not None:
         return float(np.mean(columnwise_pearson(model.predict_np(pred_source, d.inputs[pred_source]), d.target)))
-    if selection == "classification" and model.classifier is not None and d.labels is not None:
+    if selection == "classification" and d.labels is not None and train is not None and train.labels is not None:
         from sklearn.metrics import f1_score
 
         lab = d.labels >= 0
-        if lab.sum() >= 2:
-            probs = np.mean([model.classify_np(m, d.inputs[m][lab]) for m in pair], axis=0)
-            return float(f1_score(d.labels[lab], probs.argmax(1), average="macro"))
+        rows = np.flatnonzero(train.labels >= 0)
+        if lab.sum() >= 2 and len(rows):
+            # What is evaluated is how well the embedding separates the classes, each class weighing the
+            # same (probe macro-F1). Nearest class centroid (centroids from training embeddings, one per
+            # class whatever its size) measures that directly, with or without a classifier head; the
+            # argmax of a head trained on imbalanced labels can predict the majority class every epoch.
+            t = train.subset(np.sort(np.random.default_rng(0).permutation(rows)[:VAL_CAP]))
+
+            def fused(x: FitData) -> np.ndarray:
+                return l2n(np.sum([model.embed_np(m, x.inputs[m]) for m in pair], axis=0))
+
+            zt, classes = fused(t), np.unique(t.labels)
+            centroids = l2n(np.stack([zt[t.labels == c].mean(0) for c in classes]))
+            pred = classes[np.argmax(fused(d.subset(np.flatnonzero(lab))) @ centroids.T, 1)]
+            return float(f1_score(d.labels[lab], pred, average="macro"))
     if len(pair) == 2:
         return recall_at_k(model.embed_np(pair[0], d.inputs[pair[0]]), model.embed_np(pair[1], d.inputs[pair[1]]))
     return float("nan")
@@ -150,13 +164,14 @@ def fit(cfg: ConfigSpec, train: FitData, val: FitData, *, selection: str, n_clas
     gen = torch.Generator().manual_seed(seed)
     hist = {"train_loss": [], "val_loss": [], "val_score": [], "temperature": [], "seconds": [],
             "terms": {x.name: [] for x in cfg.losses}}
-    # The untrained model is a candidate too (epoch 0): with identity-initialised heads it is the
-    # pretrained space, and training is kept only if it beats that on validation.
+    # With identity-initialised (residual) heads the untrained model is the pretrained space, so it is
+    # a candidate too (epoch 0) and training is kept only if it beats that on validation. Randomly
+    # initialised heads start as an arbitrary projection: scored for the record, never kept.
     model.eval()
-    init = score(model, val, selection, pred_source)
+    init = score(model, val, selection, pred_source, train)
     hist["initial_val_score"] = round(init, 5) if np.isfinite(init) else None
     best, best_epoch, best_state, stale = -np.inf, 0, None, 0
-    if np.isfinite(init):
+    if np.isfinite(init) and all(h.residual for h in model.heads.values()):
         best = init
         best_state = copy.deepcopy({k: v.detach().cpu() for k, v in model.state_dict().items()})
     start, why = time.perf_counter(), "epoch cap"
@@ -182,7 +197,7 @@ def fit(cfg: ConfigSpec, train: FitData, val: FitData, *, selection: str, n_clas
         with torch.no_grad():
             vt = _total(cfg, compute_losses(model, cfg, _slice(va, torch.arange(min(val.n, VAL_CAP),
                                                                                  device=device)), pred_source))
-        sc = score(model, val, selection, pred_source)
+        sc = score(model, val, selection, pred_source, train)
         hist["train_loss"].append(round(total / max(1, steps), 5))
         hist["val_loss"].append(round(float(vt), 5))
         hist["val_score"].append(round(sc, 5))

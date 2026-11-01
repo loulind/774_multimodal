@@ -9,7 +9,8 @@
                           embedding (classifying a new image without its partner), or
                           the fused embedding when there is no image modality
   clustering / spatial_maps  k-means clusters of held-out embeddings on one held-out
-                          slide, cross-tabulated with the labels
+                          slide, cross-tabulated with the labels (without labels: each
+                          modality's clusters cross-tabulated with the other's)
 """
 
 from __future__ import annotations
@@ -74,7 +75,13 @@ def confusion(probe_result: dict, classes: list[str]) -> dict:
 
 
 def cluster_map(Z: np.ndarray, labels: np.ndarray | None, classes: list[str], groups: np.ndarray,
-                xy: np.ndarray, k: int | None = None, seed: int = 0) -> dict:
+                xy: np.ndarray | None = None, k: int | None = None, seed: int = 0,
+                views: dict[str, np.ndarray] | None = None) -> dict:
+    """k-means clusters of the fused embeddings of one held-out group (all held-out samples when
+    there is no grouping), cross-tabulated with the labels. Without labels, ``views`` (each
+    modality's embeddings) are clustered separately and cross-tabulated with each other instead,
+    columns matched to rows so that agreement shows as a diagonal. ``xy``: spot coordinates."""
+    from scipy.optimize import linear_sum_assignment
     from sklearn.cluster import KMeans
     from sklearn.metrics import adjusted_rand_score
 
@@ -86,8 +93,9 @@ def cluster_map(Z: np.ndarray, labels: np.ndarray | None, classes: list[str], gr
     sel = g == slide
     k = k or max(2, len(np.unique(lab[sel & (lab >= 0)])) or 5)
     clusters = KMeans(n_clusters=k, n_init=10, random_state=seed).fit_predict(l2n(Z[sel]))
-    out = {"group": slide, "k": int(k), "x": xy[sel, 0].tolist(), "y": xy[sel, 1].tolist(),
-           "cluster": clusters.tolist()}
+    out = {"group": slide, "k": int(k), "cluster": clusters.tolist()}
+    if xy is not None:
+        out["x"], out["y"] = xy[sel, 0].tolist(), xy[sel, 1].tolist()
     if (lab[sel] >= 0).sum() >= 10:
         m = lab[sel] >= 0
         out["label"] = [classes[v] if v >= 0 else None for v in lab[sel]]
@@ -96,4 +104,14 @@ def cluster_map(Z: np.ndarray, labels: np.ndarray | None, classes: list[str], gr
         for c, v in zip(clusters[m], lab[sel][m]):
             table[c, v] += 1
         out["contingency"] = {"clusters": list(range(k)), "classes": classes, "counts": table.tolist()}
+    elif views is not None and len(views) == 2:
+        (na, za), (nb, zb) = views.items()
+        ca = KMeans(n_clusters=k, n_init=10, random_state=seed).fit_predict(l2n(za[sel]))
+        cb = KMeans(n_clusters=k, n_init=10, random_state=seed).fit_predict(l2n(zb[sel]))
+        table = np.zeros((k, k), int)
+        for i, j in zip(ca, cb):
+            table[i, j] += 1
+        _, cols = linear_sum_assignment(-table)              # column j matched to row j
+        out["agreement"] = {"rows": na, "cols": nb, "col_clusters": cols.tolist(),
+                            "counts": table[:, cols].tolist(), "ari": float(adjusted_rand_score(ca, cb))}
     return out

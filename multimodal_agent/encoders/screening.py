@@ -31,6 +31,7 @@ from ..evaluate.metrics import recall_at_k, ridge_r2
 from ..models.linear import CCA
 from ..preprocess.image import ImageTransform, ReinhardNormalizer
 from ..preprocess.matrix import MatrixPreprocessor
+from ..preprocess.tabular import TabularPreprocessor
 from ..preprocess.text import clean
 from ..schema import ModalityPlan, ScreeningResult, ScreenScore
 from .pretrained import FeatureCache, ids_digest, image_features, load_encoder, release_all, text_features
@@ -188,6 +189,10 @@ def screen(ds, profile, task, prelim_plan, train_idx: np.ndarray, val_idx: np.nd
                 finally:
                     release_all()
                 feats[name][enc] = (both[: len(tr)], both[len(tr):])
+        elif kind == "tabular":
+            df = ds.modalities[name].data
+            pre = TabularPreprocessor(exclude=[label_col]).fit(df.iloc[tr])
+            feats[name]["mlp"] = (pre.transform(df.iloc[tr]), pre.transform(df.iloc[va]))
         else:
             X = ds.modalities[name].data
             mx = profile.modality(name).matrix

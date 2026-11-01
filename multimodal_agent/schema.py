@@ -73,8 +73,12 @@ class MatrixProfile(BaseModel):
 
 
 class TabularProfile(BaseModel):
-    n_features: int
+    n_features: int                                # columns
     missing_fraction: float
+    n_numeric: int = 0
+    n_categorical: int = 0
+    max_levels: int = 0                            # most levels of any categorical column
+    columns: list[str] = Field(default_factory=list)
 
 
 class SpatialProfile(BaseModel):
@@ -157,14 +161,16 @@ class DataProfile(BaseModel):
     def modality(self, name: str) -> ModalityProfile:
         return next(m for m in self.modalities if m.name == name)
 
-    def brief(self) -> str:
-        """One line for logs."""
+    def brief(self, label_column: str | None = None) -> str:
+        """One line for logs; ``label_column``: the label the run evaluates (else the first)."""
         mods = ", ".join(f"{m.name} ({m.kind}, {m.n_present:,})" for m in self.modalities)
         parts = [f"{self.format}", f"n={self.n_samples:,}", mods]
         if self.labels:
-            lab = self.labels[0]
+            lab = self.label(label_column) or self.labels[0]
+            others = len(self.labels) - 1
             parts.append(f"label '{lab.column}' {lab.n_classes} classes on "
-                         f"{lab.labelled_fraction:.0%} of samples")
+                         f"{lab.labelled_fraction:.0%} of samples"
+                         + (f" (+{others} other categorical column{'s' if others > 1 else ''})" if others else ""))
         if self.cv_group:
             g = next(g for g in self.groups if g.column == self.cv_group)
             parts.append(f"{g.n_levels} '{g.column}' groups")

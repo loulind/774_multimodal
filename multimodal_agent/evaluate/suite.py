@@ -71,14 +71,26 @@ def evaluate_fold(reps: list[Representation], fd: FoldData, metrics: list[str], 
                   predictions: dict[str, np.ndarray] | None = None, seed: int = 0) -> dict:
     out: dict = {"fold": fd.name, "n_test": int(len(next(iter(reps[0].test.values())))),
                  "retrieval": {}, "geometry": {}, "probe": {}, "knn": {}, "clustering": {},
-                 "group_silhouette": {}, "prediction": {}}
+                 "cluster_agreement": {}, "group_silhouette": {}, "prediction": {}}
     labels = fd.y_test is not None and fd.y_train is not None and (fd.y_test >= 0).any()
     k = len(fd.classes)
     a = fd.pair[0]
     b = fd.pair[1] if len(fd.pair) > 1 else None
+    k_free = None                       # clustering without labels: one k for every representation
+    if not labels and "clustering_ari_nmi" in metrics and b is not None:
+        ref = next((r for r in reps if r.kind == "unimodal" and a in r.train and b in r.train),
+                   next((r for r in reps if a in r.train and b in r.train), None))
+        if ref is not None:
+            k_free, sil = PR.choose_k([ref.train[a], ref.train[b]], seed)
+            out["cluster_k"] = {"k": k_free, "chosen_on": ref.name, "silhouette_by_k": sil}
     unimodal_probas = []
     for rep in reps:
         te = rep.test
+        if k_free is not None and a in te and b in te:
+            fused = _views(rep, "test", fd.pair).get("fused")
+            res = PR.cluster_agreement(te[a], te[b], k_free, seed, fused)
+            if res:
+                out["cluster_agreement"][rep.name] = res
         if rep.aligned and b is not None and a in te and b in te:
             if "retrieval_recall_at_k" in metrics:
                 res = R.retrieval_metrics(te[a], te[b], ks, fd.y_test if labels else None)

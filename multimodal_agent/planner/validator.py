@@ -129,8 +129,22 @@ def _check_config(c: ConfigSpec, plan: Plan, profile: DataProfile, budget: Budge
             if m.text_max_tokens is None:
                 m.text_max_tokens = min(cap, 77)
             _clip(m, "text_max_tokens", 8, cap, f"{c.name}/{m.modality}", repairs)
-        if kind in ("matrix", "tabular"):
-            p = prof.matrix.n_features if prof.matrix else (prof.tabular.n_features if prof.tabular else 0)
+        if kind == "tabular":                     # no counts to normalise, no feature selection
+            p = prof.tabular.n_features if prof.tabular else 0
+            if m.matrix_input not in ("standardised", "pca"):
+                if m.matrix_input is not None:
+                    repairs.append(f"{c.name}: {m.modality} matrix_input {m.matrix_input} -> standardised "
+                                   "(a table has no counts to normalise)")
+                m.matrix_input = "standardised"
+            m.n_variable_features = None
+            if m.matrix_input == "pca":
+                if m.pca_components is None:
+                    m.pca_components = min(50, max(2, p))
+                _clip(m, "pca_components", 2, max(2, p), f"{c.name}/{m.modality}", repairs)
+            else:
+                m.pca_components = None
+        elif kind == "matrix":
+            p = prof.matrix.n_features if prof.matrix else 0
             if m.matrix_input is None:
                 m.matrix_input = "log_normalised" if prof.matrix and prof.matrix.integer_valued \
                     else "standardised"

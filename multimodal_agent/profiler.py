@@ -27,6 +27,7 @@ import scipy.sparse as sp
 from .data.dataset import Modality, MultimodalDataset, SpotPatchSource
 from .data.roles import SPLIT_TOKENS, coarsest_group
 from .preprocess.matrix import lognorm, top_variable
+from .preprocess.tabular import is_numeric_column
 from .schema import (DataProfile, GroupProfile, ImageProfile, LabelProfile, MatrixProfile,
                      ModalityProfile, PairingProfile, RoleRecord, SpatialProfile, SplitProfile,
                      TabularProfile, TextProfile)
@@ -37,6 +38,7 @@ MAX_ROWS = 5000
 N_VARIABLE = 2000
 N_PCS = 50
 TWIN_COSINE = 0.95
+MIN_GROUP_IMAGES = 10            # images a group needs before its mean colour is estimated
 
 
 # ---------------------------------------------------------------------------
@@ -121,13 +123,16 @@ def _image_profile(m: Modality, obs: pd.DataFrame, group_col: str | None, rng) -
     src = m.images
     idx = np.flatnonzero(m.present)
     if group_col is not None:
-        # Group-stratified sampling (and a between-group colour share) only makes
-        # sense when groups hold many images each; tiny groups -> random sample.
-        if obs[group_col].iloc[idx].value_counts().median() < 10:
+        # Group-stratified sampling (and a between-group colour share) needs groups large enough
+        # to estimate their mean colour: it is used when groups of >= 10 images hold most of the
+        # images (smaller groups are left out of the sample); otherwise a random sample.
+        sizes = obs[group_col].iloc[idx].astype(str).value_counts()
+        big = set(sizes.index[sizes >= MIN_GROUP_IMAGES])
+        if len(big) < 2 or sizes[sizes >= MIN_GROUP_IMAGES].sum() < 0.5 * len(idx):
             group_col = None
     if group_col is not None:
         levels = obs[group_col].astype(str).to_numpy()
-        chosen_levels = rng.permutation(np.unique(levels[idx]))[:12]
+        chosen_levels = rng.permutation([lv for lv in np.unique(levels[idx]) if lv in big])[:12]
         per = max(1, MAX_IMAGES // max(1, len(chosen_levels)))
         pick = np.concatenate([_sample(idx[levels[idx] == lv], per, rng) for lv in chosen_levels])
     else:
@@ -341,7 +346,11 @@ def _spatial_profile(m: Modality, obs: pd.DataFrame, library_col, image: Modalit
 
 def _tabular_profile(m: Modality) -> TabularProfile:
     df = m.data[m.present]
-    return TabularProfile(n_features=df.shape[1], missing_fraction=float(df.isna().mean().mean()))
+    cat = [c for c in df.columns if not is_numeric_column(df[c])]
+    return TabularProfile(n_features=df.shape[1], missing_fraction=float(df.isna().mean().mean()),
+                          n_numeric=df.shape[1] - len(cat), n_categorical=len(cat),
+                          max_levels=max((int(df[c].nunique()) for c in cat), default=0),
+                          columns=[str(c) for c in df.columns])
 
 
 # ---------------------------------------------------------------------------

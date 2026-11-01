@@ -336,11 +336,12 @@ def confusion(conf: dict, path: Path) -> str | None:
 
 
 def cluster_map(cm: dict, path: Path) -> str | None:
-    """k-means clusters of held-out joint embeddings: their label composition, and (spatial data)
-    where each cluster lies on the slide."""
-    cont = cm.get("contingency")
+    """k-means clusters of held-out joint embeddings: their label composition (without labels: how
+    the clusters of one modality's embeddings match those of the other), and (spatial data) where
+    each cluster lies on the slide."""
+    cont, agree = cm.get("contingency"), cm.get("agreement")
     spatial = cm.get("spatial") and cm.get("x")
-    if cont is None and not spatial:
+    if cont is None and agree is None and not spatial:
         return None
     plt = _plt()
     k = cm["k"]
@@ -348,14 +349,23 @@ def cluster_map(cm: dict, path: Path) -> str | None:
     n_maps = min(k, MAX_PANELS + 1) if spatial else 0
     cols = 1 + min(4, n_maps)
     rows = max(1, int(np.ceil(n_maps / 4))) if spatial else 1
-    fig = plt.figure(figsize=(3.4 + 2.0 * (cols - 1), 2.5 * rows + 0.4))
+    first = 3.4 if cont is not None or agree is None else max(3.4, 1.6 + 0.3 * k)
+    fig = plt.figure(figsize=(first + 2.0 * (cols - 1), 2.5 * rows + 0.4 + (0.1 * k if agree else 0)))
     gs = fig.add_gridspec(rows, cols, width_ratios=[1.6] + [1] * (cols - 1))
     if cont is not None:
-        ax = fig.add_subplot(gs[:, 0])
         counts = np.asarray(cont["counts"])
         present = counts.sum(0) > 0                     # label classes absent from this group are not drawn
         counts = counts[:, present]
-        cont = {**cont, "classes": [c for c, keep in zip(cont["classes"], present) if keep]}
+        xlabels = [c for c, keep in zip(cont["classes"], present) if keep]
+        ylabels = [f"cluster {c}" for c in cont["clusters"]]
+        title = f"Label mix per cluster (ARI {cm.get('ari', 0):.3f})"
+    elif agree is not None:
+        counts = np.asarray(agree["counts"])
+        xlabels = [f"{agree['cols']} {c}" for c in agree["col_clusters"]]
+        ylabels = [f"{agree['rows']} {c}" for c in range(len(counts))]
+        title = f"Clusters of each modality, matched (ARI {agree['ari']:.3f})"
+    if cont is not None or agree is not None:
+        ax = fig.add_subplot(gs[:, 0])
         frac = counts / np.maximum(1, counts.sum(1, keepdims=True))
         ax.imshow(frac, cmap=_cmap(BLUES, "blues"), vmin=0, vmax=1, aspect="auto")
         for i in range(frac.shape[0]):
@@ -363,12 +373,12 @@ def cluster_map(cm: dict, path: Path) -> str | None:
                 if counts[i, j]:
                     ax.text(j, i, f"{counts[i, j]}", ha="center", va="center", fontsize=6.5,
                             color="#ffffff" if frac[i, j] > 0.55 else INK)
-        ax.set_xticks(range(len(cont["classes"])), cont["classes"], rotation=35, ha="right", fontsize=7)
-        ax.set_yticks(range(frac.shape[0]), [f"cluster {c}" for c in cont["clusters"]], fontsize=7)
+        ax.set_xticks(range(len(xlabels)), xlabels, rotation=35, ha="right", fontsize=7)
+        ax.set_yticks(range(frac.shape[0]), ylabels, fontsize=7)
         ax.tick_params(length=0)
         for s in ax.spines.values():
             s.set_visible(False)
-        ax.set_title(f"Label mix per cluster (ARI {cm.get('ari', 0):.3f})", fontsize=8.5)
+        ax.set_title(title, fontsize=8.5)
     if spatial:
         x, y = np.asarray(cm["x"]), np.asarray(cm["y"])
         size = max(1.5, min(10.0, 6000 / max(1, len(x))))
@@ -381,7 +391,8 @@ def cluster_map(cm: dict, path: Path) -> str | None:
             ax.invert_yaxis()
             _bare(ax)
             ax.set_title(f"cluster {c} (n={int(sel.sum())})", fontsize=7.5)
-    where = f"held-out {cm.get('group_column') or 'group'} {cm.get('group')}"
+    where = (f"held-out {cm['group_column']} {cm.get('group')}" if cm.get("group_column")
+             else "all held-out samples")
     fig.suptitle(f"k-means clusters (k={k}) of held-out joint embeddings, {where}", x=0.02, ha="left",
                  fontsize=9, fontweight="bold", color=INK)
     fig.tight_layout()

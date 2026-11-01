@@ -148,3 +148,46 @@ def test_downstream_outputs():
     assert maps["group"] == "s1" and len(maps["genes"]) == 3 and maps["genes"][0]["r_within"] > 0.9
     cm = D.cluster_map(X, y, ["a", "b", "c"], groups, xy)
     assert cm["ari"] > 0.99 and len(cm["cluster"]) == 200
+
+
+# --- clustering without labels ----------------------------------------------------------------
+
+def test_choose_k_and_cross_modal_cluster_agreement():
+    rng = np.random.default_rng(5)
+    X, y = clusters(600, k=4, spread=0.1, seed=5)
+    A, B = X + 0.05 * rng.normal(size=X.shape), X @ rng.normal(size=(16, 16))   # two views of one structure
+    k, sil = PR.choose_k([A[:400], B[:400]], seed=0)
+    assert k == 4 and set(sil) == set(PR.CLUSTER_KS)
+    shared = PR.cluster_agreement(A[400:], B[400:], 4, fused=A[400:])
+    assert shared["cross_modal_ari"] > 0.9 and shared["silhouette"] > 0.5
+    unrelated = PR.cluster_agreement(A[400:], rng.normal(size=(200, 16)), 4)
+    assert abs(unrelated["cross_modal_ari"]) < 0.1 and "silhouette" not in unrelated
+
+
+def test_evaluate_fold_without_labels_uses_one_k_for_every_representation():
+    rng = np.random.default_rng(6)
+    X, _ = clusters(900, k=3, spread=0.1, seed=6)
+    tr, te = np.arange(600), np.arange(600, 900)
+    A, B = X + 0.02 * rng.normal(size=X.shape), X @ rng.normal(size=(16, 16))
+    joint = S.Representation("primary", "joint", {"a": A[tr], "b": A[tr]}, {"a": A[te], "b": A[te] + 0.01})
+    uni = S.Representation("unimodal", "unimodal", {"a": A[tr], "b": B[tr]}, {"a": A[te], "b": B[te]}, aligned=False)
+    noise = S.Representation("noise", "joint", {"a": A[tr], "b": A[tr]}, {"a": A[te], "b": rng.normal(size=(300, 16))})
+    f = S.evaluate_fold([joint, uni, noise], S.FoldData("f", ["a", "b"]), ["retrieval_recall_at_k", "clustering_ari_nmi"])
+    assert f["cluster_k"]["k"] == 3 and f["cluster_k"]["chosen_on"] == "unimodal"
+    agree = f["cluster_agreement"]
+    assert {r["k"] for r in agree.values()} == {3}
+    assert agree["primary"]["cross_modal_ari"] > 0.9 > abs(agree["noise"]["cross_modal_ari"]) + 0.8
+    assert "silhouette" in agree["primary"] and "silhouette" not in agree["unimodal"]   # no fused view
+    assert f["clustering"] == {} and f["probe"] == {}                                   # nothing needs labels
+
+
+def test_cluster_map_without_labels_or_coordinates_cross_tabulates_the_modalities():
+    rng = np.random.default_rng(7)
+    X, _ = clusters(300, k=3, spread=0.05, seed=7)
+    B = X @ rng.normal(size=(16, 16))
+    cm = D.cluster_map(X, None, [], np.array(["all"] * 300), None, 3, views={"rna": X, "peaks": B})
+    assert "x" not in cm and "contingency" not in cm
+    ag = cm["agreement"]
+    counts = np.asarray(ag["counts"])
+    assert ag["ari"] > 0.95 and counts.trace() > 0.95 * counts.sum()                   # matched: diagonal
+    assert (ag["rows"], ag["cols"]) == ("rna", "peaks")

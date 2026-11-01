@@ -67,7 +67,7 @@ def main(argv=None) -> None:
         from .encoders.pretrained import FeatureCache
         from .hardware import detect
         from .llm import make_client
-        from .objective import parse_objective
+        from .objective import task_from_objective
         from .planner.flow import agent_plan
         from .profiler import profile
 
@@ -77,7 +77,7 @@ def main(argv=None) -> None:
         prof = profile(ds, cfg.seed)
         budget = cfg.budget(hw.device)
         log = DecisionLog(Path(args.out) / "decision_log.json" if args.out else None)
-        task = parse_objective(args.objective, prof)
+        task, prof, _ = task_from_objective(ds, prof, args.objective, cfg.seed)
         out_dir = Path(args.out) if args.out else REPO_ROOT / cfg.runs_dir / "plan_dry_run"
         client = make_client(cfg.llm, out_dir / "llm_cache", args.replay, enabled=not args.no_llm)
         out = agent_plan(ds, prof, task, budget, hw.device, FeatureCache(REPO_ROOT / cfg.cache_dir / "features"),
@@ -86,7 +86,7 @@ def main(argv=None) -> None:
             (Path(args.out) / "plan.json").write_text(out.plan.model_dump_json(indent=2))
             (Path(args.out) / "screening.json").write_text(json.dumps(out.screening_table, indent=2,
                                                                       default=str))
-        print(prof.brief())
+        print(prof.brief(out.plan.evaluation.label_column))
         for f in out.folds:
             print(f"  {f.name}: {f.sizes()} test groups {f.test_groups} val groups {f.val_groups}")
         for s in out.screening:

@@ -217,6 +217,17 @@ def test_grouped_kfold_tests_every_group_once():
         assert obs["label"].iloc[f.test].notna().any()
 
 
+def test_grouped_kfold_validation_is_never_a_single_tiny_group():
+    sizes = [2, 3, 2, 150, 120, 4, 90, 2, 3, 110, 2, 80, 3, 2, 60, 2]   # very unequal groups
+    obs = pd.DataFrame({"centre": [f"c{g}" for g, n in enumerate(sizes) for _ in range(n)]})
+    folds, _ = make_folds(obs, np.ones(len(obs), bool),
+                          SplitSpec(strategy="grouped_kfold", group_column="centre", n_folds=4), 0)
+    for f in folds:
+        rest = len(f.train) + len(f.val)
+        assert len(f.val) >= 0.1 * rest and len(set(obs["centre"].iloc[f.train])) >= 2
+        assert not set(obs["centre"].iloc[f.val]) & set(obs["centre"].iloc[f.train])
+
+
 def test_predefined_split_without_validation_is_carved():
     obs = pd.DataFrame({"split": ["train"] * 80 + ["test"] * 20, "label": ["a", "b"] * 50})
     folds, notes = make_folds(obs, np.ones(100, bool), SplitSpec(strategy="predefined"), 0,

@@ -6,8 +6,9 @@ Three strategies, chosen by the planner:
                   training, by group when groups exist, if none is given).
   grouped_kfold   folds over a grouping column (patient, slide, source...):
                   every group is tested exactly once, and within each fold one
-                  training group is held out for validation (early stopping and
-                  model selection). With n_folds = 1, one held-out set of groups.
+                  training group (more, if one is too small) is held out for
+                  validation (early stopping and model selection). With
+                  n_folds = 1, one held-out set of groups.
   random          stratified random split (labels as strata when present).
 
 Only samples where both modalities of the aligned pair are present are split;
@@ -142,6 +143,17 @@ def make_folds(obs: pd.DataFrame, paired: np.ndarray, spec: SplitSpec, seed: int
             if len(rest_levels) >= 3:
                 pool = [lv for lv in rest_levels if labelled[lv] > 0] or rest_levels
                 val_levels = [pool[rng.integers(len(pool))]]
+                # With groups of unequal size one group can be far too small to select models on:
+                # add groups, in random order, until validation holds val_fraction of the remaining
+                # samples, keeping at least two training groups.
+                target = spec.val_fraction * sum(size[lv] for lv in rest_levels)
+                if size[val_levels[0]] < target:
+                    more = [lv for lv in rng.permutation(pool) if lv not in val_levels] + \
+                           [lv for lv in rng.permutation(rest_levels) if lv not in pool]
+                    for lv in more:
+                        if sum(size[v] for v in val_levels) >= target or len(val_levels) >= len(rest_levels) - 2:
+                            break
+                        val_levels.append(lv)
                 val = idx[np.isin(groups[idx], val_levels)]
                 train = idx[np.isin(groups[idx], [lv for lv in rest_levels if lv not in val_levels])]
             else:

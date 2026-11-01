@@ -216,3 +216,23 @@ class MultimodalDataset:
         for n in names:
             mask &= self.modalities[n].present
         return mask
+
+    def exclude_inputs(self, columns) -> list[str]:
+        """Remove outcome columns from the tabular modalities, so that a label the run evaluates is
+        never also an input. Returns the columns removed."""
+        from ..preprocess.tabular import describe_columns
+
+        removed = []
+        for name, m in list(self.modalities.items()):
+            drop = [c for c in columns if m.kind == "tabular" and c and c in m.data.columns]
+            if not drop:
+                continue
+            m.data = m.data.drop(columns=drop)
+            removed += drop
+            if m.data.shape[1] == 0:
+                del self.modalities[name]
+                continue
+            m.feature_names = list(m.data.columns)
+            m.present = m.data.notna().any(axis=1).to_numpy()
+            m.source = describe_columns(m.data)
+        return removed

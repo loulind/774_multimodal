@@ -43,7 +43,7 @@ from .models.finetune import finetune
 from .models.inputs import assemble, label_codes
 from .models.linear import LinearAligner
 from .models.train import SELECTION, fit
-from .objective import parse_objective
+from .objective import task_from_objective
 from .planner.flow import agent_plan
 from .profiler import profile as profile_data
 from .schema import ConfigSpec
@@ -136,19 +136,24 @@ class Agent:
         cfg = self.cfg
         with self.stage("load and profile"):
             self.ds = load_path(self.data_path, cfg.label_column, cfg.group_column)
-            self.prof = profile_data(self.ds, cfg.seed)
+            t, self.prof, removed = task_from_objective(self.ds, profile_data(self.ds, cfg.seed),
+                                                        self.objective, cfg.seed)
         (self.out / "profile.json").write_text(self.prof.model_dump_json(indent=1))
-        self.log.add("profile", "data profile", self.prof.brief(),
+        self.log.add("profile", "data profile", self.prof.brief(t.label_column),
                      "Measured from the data before any modeling decision (profile.json).", [],
                      {"n_samples": self.prof.n_samples,
                       "modalities": {m.name: m.kind for m in self.prof.modalities}}, source="system")
-        t = parse_objective(self.objective, self.prof)
         self.task = t
         self.log.add("objective", "parsed objective",
                      f"tasks {t.tasks}; primary {t.primary_task}; modalities {t.pair}"
                      + (f"; predict {t.prediction.target} from {t.prediction.source}" if t.prediction else ""),
                      "; ".join(f"{k}: {', '.join(v)}" for k, v in t.evidence.items()) or "no task words found",
                      [], {"label_column": t.label_column, "label_evidence": t.label_evidence}, source="heuristic")
+        if removed:
+            self.log.add("preprocessing", "outcome kept out of the inputs", f"removed {', '.join(removed)}",
+                         f"'{t.label_column}' is the label this run evaluates ({t.label_evidence}), so it is not "
+                         "one of the tabular inputs; the data were profiled again without it.", [],
+                         {"removed": removed}, source="system")
 
     def make_plan(self) -> None:
         cfg = self.cfg
@@ -480,8 +485,9 @@ class Agent:
                     out["confusion"] = {**D.confusion(pr, classes), "view": view}
             if {"clustering", "spatial_maps"} & set(plan.downstream) and len(self.pair) == 2:
                 z = l2n(l2n(rec.emb["test"][a]) + l2n(rec.emb["test"][b]))
-                cm = D.cluster_map(z, labels, classes, groups, xy if xy is not None else np.zeros((len(idx), 2)),
-                                   seed=self.cfg.seed)
+                k_free = res.get("cluster_k", {}).get("k")           # the k chosen when there are no labels
+                cm = D.cluster_map(z, labels, classes, groups, xy, k_free, self.cfg.seed,
+                                   {a: rec.emb["test"][a], b: rec.emb["test"][b]})
                 cm.update(spatial=xy is not None, group_column=grp_col)
                 out["cluster_map"] = cm
         self.downstream_results = out

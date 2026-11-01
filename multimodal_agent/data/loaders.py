@@ -14,7 +14,8 @@ Supported layouts (a file, or a directory holding one of them):
   AnnData           .h5ad without coordinates; an obs column of image paths
                     adds an image modality.
   table             .csv / .tsv / .parquet with an image-path column, free-text
-                    columns and/or numeric columns (image + text, image + table).
+                    columns and/or numeric and categorical columns (image + text,
+                    image + table).
   10x HDF5          .h5 with several feature types (e.g. gene expression and
                     chromatin peaks) -> one matrix modality per feature type.
   paired matrices   a directory of several .h5ad files whose rows share ids.
@@ -26,12 +27,14 @@ column roles (``label``, ``group``); roles are otherwise inferred.
 from __future__ import annotations
 
 import re
+import warnings
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
+from ..preprocess.tabular import describe_columns
 from .dataset import FileImageSource, Modality, MultimodalDataset, SpotPatchSource
 from .roles import clean_missing, infer_roles
 
@@ -140,12 +143,19 @@ def _finish(name: str, path: Path, fmt: str, obs: pd.DataFrame, modalities: dict
             name = "text" if not any(m.kind == "text" for m in modalities.values()) else f"text:{r.column}"
             modalities[name] = Modality(name=name, kind="text", present=present, data=vals,
                                         source=f"column '{r.column}'")
-    numeric = [r.column for r in roles if r.role == "numeric"]
-    if fmt == "table" and len(numeric) >= 2:
-        tab = obs[numeric].apply(pd.to_numeric, errors="coerce")
+    # A table's covariates: numeric columns and categorical ones. Categorical columns are also the
+    # candidate outcomes; the one the objective evaluates is removed again once it is known
+    # (MultimodalDataset.exclude_inputs), so a label is never an input.
+    covariates = [r.column for r in roles if r.role in ("numeric", "label")]
+    empty = [c for c in covariates if obs[c].isna().all()]
+    covariates = [c for c in covariates if c not in empty]
+    if empty:
+        notes = (notes or []) + [f"columns with no values, not used: {', '.join(map(str, empty))}"]
+    if fmt == "table" and len(covariates) >= 2:
+        tab = obs[covariates].copy()
         modalities["tabular"] = Modality(name="tabular", kind="tabular",
                                          present=tab.notna().any(axis=1).to_numpy(), data=tab,
-                                         feature_names=numeric, source=f"{len(numeric)} numeric columns")
+                                         feature_names=covariates, source=describe_columns(tab))
     return MultimodalDataset(name=name, path=path, format=fmt, obs=obs, modalities=modalities,
                              roles=roles, notes=notes or [])
 
@@ -229,7 +239,9 @@ def _load_paired_h5ad(paths: list[Path], label_column, group_column) -> Multimod
 def _load_10x_h5(path: Path, label_column, group_column) -> MultimodalDataset:
     import scanpy as sc
 
-    adata = sc.read_10x_h5(path, gex_only=False)
+    with warnings.catch_warnings():                 # duplicate feature names are made unique below
+        warnings.filterwarnings("ignore", message="Variable names are not unique")
+        adata = sc.read_10x_h5(path, gex_only=False)
     adata.var_names_make_unique()
     obs = pd.DataFrame(index=adata.obs_names.astype(str))
     mods = {}

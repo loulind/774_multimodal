@@ -17,6 +17,7 @@ import math
 from ..config import Budget
 from ..decision_log import DecisionLog
 from ..encoders.registry import REGISTRY, candidates, is_dual_pair
+from ..preprocess.tabular import MIN_COUNT
 from ..schema import (ConfigSpec, DataProfile, EvalSpec, HeadSpec, LossTerm, ModalityPlan, Plan,
                       ScreeningResult, SplitSpec, TaskSpec, TrainingSpec)
 
@@ -162,7 +163,7 @@ def choose_split(ctx: Context, log: DecisionLog) -> SplitSpec:
     else:
         ctx.train_fraction = 0.7
         spec = SplitSpec(strategy="random", stratify_column=label)
-        log.add("split", "how to split the data", "stratified random 70/10/20",
+        log.add("split", "how to split the data", ("stratified random" if label else "random") + " 70/10/20",
                 "No predefined split and no grouping with enough levels; samples are treated as "
                 "exchangeable" + (f", stratified by '{label}'" if label else "") + ".",
                 [("grouped split", "no grouping column with >= 3 levels")], {})
@@ -313,6 +314,19 @@ def _preprocess(ctx: Context, name: str, encoder: str, log: DecisionLog) -> Moda
                 {"sparsity": mx.sparsity, "n_detected_5pct": mx.n_features_detected_5pct})
     elif m.kind == "tabular":
         plan.matrix_input = "standardised"
+        tb = m.tabular
+        if tb is not None:
+            log.add("preprocessing", f"'{name}' features", "impute, one-hot encode, standardise",
+                    f"{tb.n_numeric} numeric and {tb.n_categorical} categorical columns (up to {tb.max_levels} "
+                    f"levels), {tb.missing_fraction:.0%} of values missing. Numeric columns: training median for "
+                    "missing values plus a missingness indicator. Categorical columns: one indicator per level, "
+                    f"levels seen in fewer than {MIN_COUNT} training rows (or 1%) pooled as 'other'. Every "
+                    "column is standardised with training statistics; all of it is fitted on training folds only.",
+                    [("drop samples with a missing value", "loses samples, and biases the sample when "
+                      "missingness is related to the outcome"),
+                     ("integer codes for categories", "imposes an order and spacing the categories do not have")],
+                    {"n_numeric": tb.n_numeric, "n_categorical": tb.n_categorical,
+                     "missing_fraction": tb.missing_fraction})
     return plan
 
 
@@ -469,13 +483,18 @@ def choose_configs(ctx: Context, primary: ConfigSpec, log: DecisionLog) -> list[
         if ctx.n_train >= FT_PRIMARY_PAIRS:
             ft.role, primary.role = "primary", "comparison"
         options.append(ft)
-    log.add("regime", "frozen backbones or fine-tuning", "fine-tune as comparison" if ok else "frozen",
-            ("Frozen pretrained backbones with small trainable projection heads: few trainable "
-             "parameters for the number of pairs (low variance), features computed once. ") +
-            (f"Partial fine-tuning of the last {FT_BLOCKS} blocks is run as a comparison: {why}."
-             if ok else f"Fine-tuning not tried: {why}."),
-            [("full fine-tuning", "~86M parameters per tower for the available pairs; high variance "
-              "and compute")], {"n_train_est": ctx.n_train})
+    if all(REGISTRY[m.encoder].trainable for m in primary.modalities):
+        log.add("regime", "frozen backbones or fine-tuning", "trained from scratch",
+                "No pretrained encoder applies to these modalities: each is encoded by a small MLP trained "
+                "from scratch, so there is no backbone to freeze or fine-tune.", [], {"n_train_est": ctx.n_train})
+    else:
+        log.add("regime", "frozen backbones or fine-tuning", "fine-tune as comparison" if ok else "frozen",
+                ("Frozen pretrained backbones with small trainable projection heads: few trainable "
+                 "parameters for the number of pairs (low variance), features computed once. ") +
+                (f"Partial fine-tuning of the last {FT_BLOCKS} blocks is run as a comparison: {why}."
+                 if ok else f"Fine-tuning not tried: {why}."),
+                [("full fine-tuning", "~86M parameters per tower for the available pairs; high variance "
+                  "and compute")], {"n_train_est": ctx.n_train})
     names = [t.name for t in primary.losses]
     if "supervised_ce" in names and primary.strategy == "contrastive_alignment":
         options.append(_variant(primary, "contrastive_only", "Tests whether the supervised term helps.",

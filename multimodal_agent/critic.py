@@ -330,9 +330,12 @@ def editable_fields(plan: Plan, profile: DataProfile, budget: Budget) -> dict:
                 out[f"modalities.{m.modality}.patch_context"] = list(V.PATCH_CONTEXT)
         if kind == "text":
             out[f"modalities.{m.modality}.text_max_tokens"] = [8, REGISTRY[m.encoder].max_tokens or 512]
-        if kind in ("matrix", "tabular"):
+        if kind == "matrix":
             out[f"modalities.{m.modality}.n_variable_features"] = [50, "number of features"]
             out[f"modalities.{m.modality}.matrix_input"] = ["log_normalised", "pca", "standardised"]
+            out[f"modalities.{m.modality}.pca_components"] = [2, 256]
+        if kind == "tabular":
+            out[f"modalities.{m.modality}.matrix_input"] = ["standardised", "pca"]
             out[f"modalities.{m.modality}.pca_components"] = [2, 256]
     return out
 
@@ -396,7 +399,7 @@ def critique(plan: Plan, profile: DataProfile, val_folds: list[dict], comparison
     out, cfg, repairs = None, None, []
     if client is not None and client.available:
         payload = {
-            "objective": plan.task.raw_objective, "profile_summary": profile.brief(),
+            "objective": plan.task.raw_objective, "profile_summary": profile.brief(plan.evaluation.label_column),
             "plan": plan.model_dump(exclude={"source"}),
             "validation": validation_summary(plan, val_folds, comparisons), "flags": _round(flags),
             "training": {name: [_round({**{k: v for k, v in r.items() if k not in VOLATILE},

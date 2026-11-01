@@ -14,7 +14,7 @@ from multimodal_agent.models import losses as L
 from multimodal_agent.models.finetune import finetune, unfreeze_last
 from multimodal_agent.models.inputs import label_codes
 from multimodal_agent.models.joint import FitData
-from multimodal_agent.models.train import fit
+from multimodal_agent.models.train import fit, score
 from multimodal_agent.schema import ConfigSpec, HeadSpec, LossTerm, ModalityPlan, TrainingSpec
 
 
@@ -115,6 +115,25 @@ def test_self_supervised_single_modality():
     r = fit(cfg([("masked_denoising", 1.0)], strategy="self_supervised", max_epochs=3), tr, va,
             selection="loss", decode=("a",), seed=0)
     assert r.epochs_run == 3 and r.model.embed_np("a", A[:5]).shape == (5, 16)
+
+
+def test_classification_score_is_balanced_nearest_centroid():
+    rng = np.random.default_rng(0)
+    centres = np.eye(3, 8)
+    y_tr, y_va = np.repeat([0, 1, 2], [160, 20, 20]), np.repeat([0, 1, 2], [80, 10, 10])
+
+    class Stub:
+        pair = ["a"]
+
+        def embed_np(self, m, X):
+            return X / np.linalg.norm(X, axis=1, keepdims=True)
+
+    tr = FitData({"a": centres[y_tr] + 0.1 * rng.normal(size=(200, 8))}, y_tr)
+    va = FitData({"a": centres[y_va] + 0.1 * rng.normal(size=(100, 8))}, y_va)
+    assert score(Stub(), va, "classification", None, tr) == pytest.approx(1.0)   # separable despite 80/10/10
+    # an embedding that has not separated the minority classes scores low (all near the majority centroid)
+    lumped = FitData({"a": centres[np.zeros(100, int)] + 0.1 * rng.normal(size=(100, 8))}, y_va)
+    assert score(Stub(), lumped, "classification", None, tr) < 0.4
 
 
 def test_label_codes_come_from_training_classes():
@@ -239,3 +258,8 @@ def test_residual_head_starts_from_the_pretrained_space():
     assert res.history["initial_val_score"] == pytest.approx(1.0) and res.summary()["train_loss_at_best"] is None
     Z = X[300:] / np.linalg.norm(X[300:], axis=1, keepdims=True)
     assert np.allclose(res.model.embed_np("a", X[300:]), Z, atol=1e-5)
+    # randomly initialised heads: the start is scored for the record but is never the model kept
+    c.head = HeadSpec(embed_dim=16, hidden_dim=32, n_layers=2, dropout=0.0, residual=False)
+    res = fit(c, FitData({"a": X[:300], "b": X[:300]}), FitData({"a": X[300:], "b": X[300:]}),
+              selection="retrieval", seed=0)
+    assert res.best_epoch >= 1 and res.history["initial_val_score"] is not None

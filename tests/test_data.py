@@ -173,3 +173,25 @@ def test_morans_i_separates_smooth_from_random():
 def test_missing_tokens():
     s = pd.Series(["tumour", "Undetermined", "", "NA", "stroma", None])
     assert clean_missing(s).isna().tolist() == [False, True, True, True, False, True]
+
+
+def test_colour_share_is_measured_on_the_large_groups_when_most_groups_are_tiny(tmp_path):
+    from PIL import Image
+
+    rng = np.random.default_rng(2)
+    (tmp_path / "images").mkdir()
+    sizes = [30] * 5 + [2] * 25                      # median group size 2, but large groups hold 75%
+    rows, i = [], 0
+    for g, n in enumerate(sizes):
+        tint = rng.integers(40, 215, 3)               # each group has its own colour cast
+        for _ in range(n):
+            arr = np.clip(tint + rng.normal(0, 8, (16, 16, 3)), 0, 255).astype(np.uint8)
+            Image.fromarray(arr).save(tmp_path / "images" / f"im{i}.png")
+            rows.append({"id": f"im{i}", "image_path": f"images/im{i}.png", "centre": f"c{g}"})
+            i += 1
+    pd.DataFrame(rows).to_csv(tmp_path / "pairs.csv", index=False)
+    share = profile(load_path(tmp_path)).modality("image").image.colour_between_group_share
+    assert share is not None and share > 0.5
+    small = pd.DataFrame(rows[150:])                  # tiny groups only: too small to estimate
+    small.to_csv(tmp_path / "pairs.csv", index=False)
+    assert profile(load_path(tmp_path)).modality("image").image.colour_between_group_share is None

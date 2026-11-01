@@ -1,4 +1,5 @@
-"""Label-based quality of a representation: linear probe, nearest neighbours, clustering.
+"""Label-based quality of a representation: linear probe, nearest neighbours, clustering
+(and, without labels, agreement between the modalities' clusters).
 
   linear probe   multinomial logistic regression on the frozen representation,
                  class-balanced weights (so rare classes count, matching macro-F1),
@@ -10,6 +11,10 @@
   clustering     k-means with k = number of classes on held-out samples, compared
                  with the labels by ARI (adjusted Rand index; 0 = chance agreement,
                  1 = identical partitions) and NMI; silhouette of the true labels.
+  cluster agreement  without labels: k-means on each modality's held-out embeddings
+                 separately, with k chosen once on training samples by the largest mean
+                 silhouette width; the ARI between the two partitions measures whether
+                 both modalities group the samples the same way.
   group silhouette  silhouette of the *grouping* (slide, patient) instead of labels:
                  a high value means the representation is organised by batch.
 
@@ -118,6 +123,48 @@ def clustering(Z: np.ndarray, y: np.ndarray, seed: int = 0) -> dict:
     return {"k": k, "ari": float(adjusted_rand_score(y[lab], pred)),
             "nmi": float(normalized_mutual_info_score(y[lab], pred)),
             "label_silhouette": float(silhouette_score(X[sub], y[lab][sub], metric="cosine"))}
+
+
+CLUSTER_KS = range(2, 13)
+
+
+def choose_k(views: list[np.ndarray], seed: int = 0, ks=CLUSTER_KS, n_max: int = 2000) -> tuple[int, dict]:
+    """Number of clusters when there are no labels: the k whose k-means partition has the largest
+    mean silhouette width. ``views`` are training-sample features, one block per modality,
+    each L2-normalised so that the modalities count equally."""
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
+
+    X = np.hstack([l2n(v) for v in views])
+    X = X[np.random.default_rng(seed).permutation(len(X))[:n_max]]
+    sil = {}
+    for k in ks:
+        if k < len(X):
+            pred = KMeans(n_clusters=k, n_init=4, random_state=seed).fit_predict(X)
+            sil[k] = float(silhouette_score(X, pred, metric="cosine"))
+    return (max(sil, key=sil.get) if sil else 2), sil
+
+
+def cluster_agreement(Za: np.ndarray, Zb: np.ndarray, k: int, seed: int = 0, fused: np.ndarray | None = None) -> dict:
+    """Clustering without labels: k-means on each modality's held-out embeddings separately, and the
+    agreement of the two partitions (ARI: 0 = chance, 1 = identical). If the representation captures
+    structure the modalities share, both should group the samples the same way. ``fused`` adds the
+    silhouette width of the clusters of the fused embedding (how well separated they are)."""
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score, silhouette_score
+
+    if len(Za) < 20:
+        return {}
+    ca = KMeans(n_clusters=k, n_init=10, random_state=seed).fit_predict(l2n(Za))
+    cb = KMeans(n_clusters=k, n_init=10, random_state=seed).fit_predict(l2n(Zb))
+    out = {"k": k, "cross_modal_ari": float(adjusted_rand_score(ca, cb)),
+           "cross_modal_nmi": float(normalized_mutual_info_score(ca, cb))}
+    if fused is not None:
+        X = l2n(fused)
+        pred = KMeans(n_clusters=k, n_init=10, random_state=seed).fit_predict(X)
+        sub = np.random.default_rng(seed).permutation(len(X))[:3000]
+        out["silhouette"] = float(silhouette_score(X[sub], pred[sub], metric="cosine"))
+    return out
 
 
 def group_silhouette(Z: np.ndarray, groups: np.ndarray, seed: int = 0) -> float | None:

@@ -15,8 +15,9 @@ OBJ = "Integrate RNA and chromatin accessibility to learn a joint embedding for 
       "and cell-type classification."
 
 
-def write_paired(d, n, n_donors, seed=0):
-    """Two count matrices (RNA, chromatin peaks) driven by a shared cell-type signal."""
+def write_paired(d, n, n_donors, seed=0, labelled=True):
+    """Two count matrices (RNA, chromatin peaks) driven by a shared cell-type signal; ``labelled=False``
+    leaves out the cell-type and donor columns."""
     import anndata as ad
 
     rng = np.random.default_rng(seed)
@@ -27,7 +28,7 @@ def write_paired(d, n, n_donors, seed=0):
     peaks = rng.poisson(np.exp(-0.6 + 0.5 * z @ rng.normal(size=(6, 60)))).astype(np.float32)
     ids = [f"c{i}" for i in range(n)]
     obs = pd.DataFrame({"cell_type": [f"type{v}" for v in y], "donor": [f"d{i % n_donors}" for i in range(n)]},
-                       index=ids)
+                       index=ids) if labelled else pd.DataFrame(index=ids)
     ad.AnnData(sp.csr_matrix(rna), obs=obs, var=pd.DataFrame(index=[f"G{i}" for i in range(80)])
                ).write_h5ad(d / "rna.h5ad")
     ad.AnnData(sp.csr_matrix(peaks), obs=pd.DataFrame(index=ids),
@@ -117,3 +118,27 @@ def test_few_pairs_give_closed_form_linear_alignment(tmp_path, monkeypatch):
     fits = [d for d in json.loads((out / "decision_log.json").read_text()) if d["step"] == "training"]
     assert fits and fits[0]["chosen"].startswith("closed form")
     assert not (out / "figures" / "training_curves.png").exists()  # no epochs to plot
+
+
+def test_unlabelled_clustering_is_measured_by_cross_modal_agreement(tmp_path, monkeypatch):
+    monkeypatch.setattr(figures, "USE_UMAP", False)
+    (tmp_path / "data").mkdir()
+    data = write_paired(tmp_path / "data", 900, 1, labelled=False)
+    out = tmp_path / "run"
+    res = run(data, "Align RNA with chromatin peaks in a shared space; evaluate retrieval and clustering.", out,
+              quick=True, no_llm=True, device="cpu")
+    ev = json.loads((out / "evaluation.json").read_text())
+    fold = ev["test"]["folds"][0]
+    assert {res["primary"], "unimodal", "cca"} <= set(fold["cluster_agreement"])
+    assert len({r["k"] for r in fold["cluster_agreement"].values()}) == 1
+    for f in ("tables/cluster_agreement.csv", "figures/cluster_map.png", "downstream/cluster_map.json"):
+        assert (out / f).exists(), f
+    cm = json.loads((out / "downstream" / "cluster_map.json").read_text())
+    assert "x" not in cm and "agreement" in cm                    # no coordinates to map; no labels
+    report = (out / "report.md").read_text()
+    assert "Clustering without labels" in report and res["number_check"] == 0
+    log = json.loads((out / "decision_log.json").read_text())
+    split = next(d for d in log if d["step"] == "split")
+    assert split["chosen"].startswith("random")                   # nothing to stratify by
+    regime = next(d for d in log if d["step"] == "regime")
+    assert regime["chosen"] == "trained from scratch"             # no pretrained backbone to freeze

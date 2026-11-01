@@ -3,7 +3,9 @@
 Everything learned from data is fitted on the fold's *training* samples only and
 then applied to validation and test samples:
 
-  * matrix / tabular modalities: normalisation, variable features, PCA;
+  * matrix modalities: normalisation, variable features, PCA;
+  * tabular modalities: imputation, one-hot encoding, standardisation (the evaluated
+    label is never an input);
   * the regression target (cross-modal prediction): the target modality's
     variable features, standardised with training means and spreads;
   * label codes: classes are those seen in training; anything else is "unlabelled".
@@ -22,6 +24,7 @@ import numpy as np
 
 from ..data.splits import Fold
 from ..preprocess.matrix import MatrixPreprocessor
+from ..preprocess.tabular import TabularPreprocessor
 from ..schema import ConfigSpec, DataProfile, Plan
 from .joint import FitData
 
@@ -63,16 +66,20 @@ def assemble(ds, profile: DataProfile, plan: Plan, cfg: ConfigSpec, fold: Fold,
              frozen: dict[str, np.ndarray]) -> Assembled:
     """``frozen[m]`` holds pretrained features for *every* dataset row of modality m."""
     tr, va, te = fold.train, fold.val, fold.test
+    outcome = [plan.evaluation.label_column]             # never a tabular input
     inputs, pre = {}, {}
     for mp in cfg.modalities:
         mod = ds.modalities[mp.modality]
-        if mod.kind in ("matrix", "tabular"):
-            X = mod.data if mod.kind == "matrix" else mod.data.to_numpy(np.float32)
+        if mod.kind == "tabular":
+            p = TabularPreprocessor(mp.matrix_input or "standardised", mp.pca_components, outcome)
+            pre[mp.modality] = p.fit(mod.data.iloc[tr])
+            inputs[mp.modality] = p.transform(mod.data)
+        elif mod.kind == "matrix":
             mx = profile.modality(mp.modality).matrix
             p = MatrixPreprocessor(mp.n_variable_features or 2000, mp.matrix_input or "log_normalised",
                                    mp.pca_components, counts=bool(mx and mx.integer_valued and mx.nonnegative))
-            pre[mp.modality] = p.fit(X[tr])
-            inputs[mp.modality] = p.transform(X)
+            pre[mp.modality] = p.fit(mod.data[tr])
+            inputs[mp.modality] = p.transform(mod.data)
         else:
             inputs[mp.modality] = frozen[mp.modality]
 
@@ -82,9 +89,15 @@ def assemble(ds, profile: DataProfile, plan: Plan, cfg: ConfigSpec, fold: Fold,
 
     target, names, order = None, [], None
     pred = plan.task.prediction
-    if pred is not None and ds.modalities[pred.target].kind in ("matrix", "tabular"):
+    if pred is not None and ds.modalities[pred.target].kind == "tabular":
         mod = ds.modalities[pred.target]
-        X = mod.data if mod.kind == "matrix" else mod.data.to_numpy(np.float32)
+        tp = TabularPreprocessor(exclude=outcome).fit(mod.data.iloc[tr])
+        target, names = tp.standardised(mod.data), list(tp.feature_names)
+        order = np.arange(len(names))                    # standardised columns: equal variance
+        pre["target"] = tp
+    elif pred is not None and ds.modalities[pred.target].kind == "matrix":
+        mod = ds.modalities[pred.target]
+        X = mod.data
         mp = next(m for m in cfg.modalities if m.modality == pred.target)
         mx = profile.modality(pred.target).matrix
         tp = MatrixPreprocessor(mp.n_variable_features or 2000, "log_normalised",

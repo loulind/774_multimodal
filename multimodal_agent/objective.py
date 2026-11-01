@@ -176,3 +176,21 @@ def parse_objective(objective: str, profile: DataProfile) -> TaskSpec:
                     modality_mentions=mentions,
                     evidence={t: [h for _, h in hits] for t, hits in found.items()},
                     source="heuristic")
+
+
+def task_from_objective(ds, profile: DataProfile, objective: str, seed: int) -> tuple[TaskSpec, DataProfile,
+                                                                                      list[str]]:
+    """Parse the objective, then take the label it evaluates out of the model inputs.
+
+    A table's categorical columns are both candidate outcomes and covariates. Once the
+    objective has fixed the outcome, it is removed from the tabular modality (a label must
+    not predict itself) and the data are profiled again. Returns the task, the profile and
+    the columns removed.
+    """
+    from .profiler import profile as profile_data
+
+    task = parse_objective(objective, profile)
+    removed = ds.exclude_inputs([task.label_column])
+    if removed:
+        profile = profile_data(ds, seed)
+    return task, profile, removed

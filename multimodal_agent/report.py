@@ -223,6 +223,22 @@ def classification_table(agent) -> list[dict]:
                    for (rep, v), d in acc.items()], key=lambda r: -(r["probe_macro_f1"] or -9))
 
 
+def cluster_agreement_table(agent) -> list[dict]:
+    """Clustering without labels: agreement between the two modalities' k-means partitions."""
+    acc: dict[str, dict[str, list]] = {}
+    for f in agent.test_folds:
+        for rep, r in f.get("cluster_agreement", {}).items():
+            d = acc.setdefault(rep, {})
+            for k in ("k", "cross_modal_ari", "cross_modal_nmi", "silhouette"):
+                d.setdefault(k, []).append(r.get(k))
+    rows = []
+    for rep, d in acc.items():
+        ks = sorted({int(k) for k in d.pop("k")})               # chosen per fold; usually one value
+        rows.append({"representation": rep, "k": ks[0] if len(ks) == 1 else "/".join(map(str, ks)),
+                     **{k: _mean(x) for k, x in d.items()}})
+    return sorted(rows, key=lambda r: -(r["cross_modal_ari"] if r["cross_modal_ari"] is not None else -9))
+
+
 def geometry_table(agent) -> list[dict]:
     acc: dict[str, dict[str, list]] = {}
     for f in agent.test_folds:
@@ -256,7 +272,8 @@ def decision_rows(agent) -> list[dict]:
 def write_tables(agent) -> dict[str, list[dict]]:
     t = {"screening": agent.screening_table.get("rows", []),
          "retrieval": retrieval_table(agent), "prediction": prediction_table(agent),
-         "classification": classification_table(agent), "geometry": geometry_table(agent),
+         "classification": classification_table(agent), "cluster_agreement": cluster_agreement_table(agent),
+         "geometry": geometry_table(agent),
          "comparisons_test": agent.test_comparisons, "comparisons_validation": agent.val_comparisons,
          "flags_test": agent.test_flags, "flags_validation": agent.val_flags,
          "training": training_table(agent), "decisions": decision_rows(agent)}
@@ -410,6 +427,9 @@ def _modality_summary(m) -> dict:
                  group_silhouette=x.group_silhouette, morans_i_median=x.morans_i_median)
     if m.spatial:
         d.update(n_libraries=m.spatial.n_libraries, spacing_over_diameter=m.spatial.spacing_over_diameter)
+    if m.tabular:
+        d.update(n_columns=m.tabular.n_features, n_numeric=m.tabular.n_numeric,
+                 n_categorical=m.tabular.n_categorical, missing_fraction=m.tabular.missing_fraction)
     return d
 
 
@@ -443,6 +463,7 @@ def build_record(agent) -> dict:
                                         "balanced_accuracy": c["balanced_accuracy"], "per_class_f1": c["per_class_f1"]}
     if ds_res.get("cluster_map"):
         downstream["clustering"] = {"k": ds_res["cluster_map"]["k"], "ari": ds_res["cluster_map"].get("ari"),
+                                    "cross_modal_ari": (ds_res["cluster_map"].get("agreement") or {}).get("ari"),
                                     "group_column": ds_res["cluster_map"].get("group_column"),
                                     "group": ds_res["cluster_map"].get("group")}
     if ds_res.get("retrieval_examples"):
@@ -452,9 +473,10 @@ def build_record(agent) -> dict:
                  "top5_same_label": sum(bool(x["same_label"]) for x in q["retrieved"])} for q in v]
             for k, v in ex.items()}
     llm = agent.client.summary() if agent.client is not None else {}
+    agreement = cluster_agreement_table(agent)
     rec = {
         "objective": agent.objective, "quick_mode": agent.cfg.quick,
-        "data": {"summary": prof.brief(), "n_samples": prof.n_samples,
+        "data": {"summary": prof.brief(plan.evaluation.label_column), "n_samples": prof.n_samples,
                  "modalities": [_modality_summary(m) for m in prof.modalities], "pairs": prof.pairing.pairs,
                  "labels": [{"column": lab.column, "n_classes": lab.n_classes, "n_labelled": lab.n_labelled,
                              "labelled_fraction": lab.labelled_fraction, "class_counts": lab.class_counts,
@@ -480,7 +502,11 @@ def build_record(agent) -> dict:
                  "prediction_method_rule": "a configuration's own regression head if it has one, else kNN in its "
                                            "joint space; fixed in advance, never chosen on test data",
                  "results": res, "retrieval": retrieval_table(agent),
-                 "prediction": prediction_table(agent)[:8], "comparisons": agent.test_comparisons,
+                 "prediction": prediction_table(agent)[:8], "cluster_agreement": agreement,
+                 "cluster_k_rule": None if not agreement else
+                 "no labels: k-means k with the largest mean silhouette width (k = 2-12) on training samples' "
+                 "unimodal features, the same k for every representation",
+                 "comparisons": agent.test_comparisons,
                  "flags": agent.test_flags},
         "validation": {"comparisons": agent.val_comparisons, "flags": agent.val_flags},
         "critic": None if crit is None else {
@@ -561,6 +587,9 @@ def template_sections(record: dict) -> dict[str, str]:
             bits.append(f"group explains {pct(m['group_variance_share'])} of top-PC variance")
         if m.get("near_twin_fraction") is not None:
             bits.append(f"near-twin fraction {f3(m['near_twin_fraction'])}")
+        if m.get("n_columns") is not None:
+            bits.append(f"{m['n_numeric']} numeric and {m['n_categorical']} categorical columns, "
+                        f"{pct(m['missing_fraction'])} of values missing")
         mods.append(f"- **{m['name']}** ({m['kind']}): " + "; ".join(bits))
     labs = [f"- label '{lab['column']}': {lab['n_classes']} classes on {lab['n_labelled']:,} samples "
             f"({pct(lab['labelled_fraction'])})" for lab in record["data"]["labels"]]
@@ -582,6 +611,13 @@ def template_sections(record: dict) -> dict[str, str]:
     if test.get("probe_chance_macro_f1") and test["results"].get("probe_macro_f1"):
         lines.append(f"- Random guessing in proportion to class frequencies gives macro-F1 "
                      f"{f3(test['probe_chance_macro_f1'])} (1/K).")
+    agree = {r["representation"]: r for r in test.get("cluster_agreement") or []}
+    if primary in agree:
+        p, others = agree[primary], [r for n, r in agree.items() if n != primary][:3]
+        lines.append(f"- **Clustering without labels** (k = {p['k']}): clusters found separately in each modality "
+                     f"agree with cross-modal ARI {f3(p['cross_modal_ari'])} for {primary}"
+                     + ("; " + "; ".join(f"{r['representation']} {f3(r['cross_modal_ari'])}" for r in others)
+                        if others else "") + " (0 = chance, 1 = identical).")
     ret = next((r for r in test["retrieval"] if r["representation"] == primary), None)
     if ret and ret.get("label_match_at_10") is not None:
         lines.append(f"- Retrieved matches share the query's label {pct(ret['label_match_at_10'])} of the time "
@@ -657,7 +693,7 @@ def methods_summary(agent) -> str:
     asm = agent.baselines(0, prim)["asm"]
     lines = ["# Methods and preprocessing", "",
              f"Generated from the executed plan (source: {plan.source}). Final configuration: '{agent.primary_name}'.",
-             "", "## Data and split", "", f"- {prof.brief()}",
+             "", "## Data and split", "", f"- {prof.brief(plan.evaluation.label_column)}",
              f"- Split: {plan.split.strategy}" + (f", grouped by '{plan.split.group_column}'" if plan.split.group_column
                                                    else "") + f"; {len(agent.folds)} fold(s). Every preprocessing "
              "statistic (feature selection, normalisation, PCA, label codes, regression targets) is fitted on the "
@@ -790,6 +826,16 @@ def report_markdown(agent, record: dict, prose: dict, figs: dict, tables: dict, 
             ("representation", "representation"), ("view", "view"), ("probe_macro_f1", "probe macro-F1"),
             ("probe_balanced_accuracy", "balanced acc."), ("knn_macro_f1", "kNN macro-F1"),
             ("cluster_ari", "ARI"), ("cluster_nmi", "NMI")]), ""]
+    if tables["cluster_agreement"]:
+        out += ["### Clustering without labels", "",
+                "There are no labels to compare clusters with, so each representation's held-out embeddings are "
+                "clustered separately for each modality (k-means, the same k for every representation, chosen on "
+                "training samples by the largest mean silhouette width). Cross-modal ARI is the agreement of the two "
+                "partitions: 0 is chance, 1 means both modalities group the samples identically. Silhouette "
+                "describes how well separated the clusters of the fused embedding are.", "",
+                md_table(tables["cluster_agreement"], [
+                    ("representation", "representation"), ("k", "k"), ("cross_modal_ari", "cross-modal ARI"),
+                    ("cross_modal_nmi", "cross-modal NMI"), ("silhouette", "silhouette (fused)")]), ""]
     if tables["geometry"]:
         out += ["### Embedding geometry", "", md_table(tables["geometry"], [
             ("representation", "representation"), ("alignment", "alignment"), ("uniformity_a", "uniformity a"),
@@ -805,7 +851,10 @@ def report_markdown(agent, record: dict, prose: dict, figs: dict, tables: dict, 
             fig("prediction_maps", "Observed and predicted values of the best-predicted target features on one "
                 "held-out group (z-scores within the group)."),
             fig("confusion", "Confusion matrix of the linear probe (rows: true class)."),
-            fig("cluster_map", "k-means clusters of held-out joint embeddings and their label composition."),
+            fig("cluster_map", "k-means clusters of held-out joint embeddings and their label composition."
+                if not (agent.downstream_results.get("cluster_map") or {}).get("agreement") else
+                "k-means clusters of each modality's held-out embeddings, cross-tabulated (columns matched to "
+                "rows; counts on the diagonal are samples both modalities put in the same cluster)."),
             fig("embedding_map", "Held-out joint embeddings of both modalities."),
             fig("training_curves", "Validation score and training loss by epoch.")]
     pred = record["downstream"].get("prediction")
